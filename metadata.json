@@ -1,0 +1,7 @@
+{
+  "name": "FinTrackPro",
+  "description": "A comprehensive personal finance tracker with AI-powered insights, dashboard analytics, and portfolio management.",
+  "requestFramePermissions": [
+    "microphone"
+  ]
+}
