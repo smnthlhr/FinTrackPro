@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { 
-  List, XCircle, Sun, Moon, Save, FileJson, FileSpreadsheet, Upload, AlertTriangle, Trash2, Download
+  List, XCircle, Sun, Moon, Save, FileJson, FileSpreadsheet, Upload, AlertTriangle, Trash2, Download, Mic, Languages
 } from 'lucide-react';
 
 interface SettingsModuleProps {
@@ -9,7 +9,7 @@ interface SettingsModuleProps {
     exportData: () => void;
     importData: (event: React.ChangeEvent<HTMLInputElement>) => void;
     exportToExcel: () => void;
-    resetData: () => void; // New prop for resetting app
+    resetData: () => void;
     incomeCategories: string[];
     setIncomeCategories: (cats: string[]) => void;
     expenseCategories: string[];
@@ -20,6 +20,12 @@ interface SettingsModuleProps {
     setInvestmentTypes: (types: string[]) => void;
     accountTypes: string[];
     setAccountTypes: (types: string[]) => void;
+    
+    // New Props for AI Settings
+    aiLanguage: string;
+    setAiLanguage: (lang: string) => void;
+    aiVoice: string;
+    setAiVoice: (voice: string) => void;
 }
 
 const SettingsModule: React.FC<SettingsModuleProps> = ({ 
@@ -28,7 +34,9 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({
     expenseCategories, setExpenseCategories, 
     debtTypes, setDebtTypes, 
     investmentTypes, setInvestmentTypes, 
-    accountTypes, setAccountTypes 
+    accountTypes, setAccountTypes,
+    aiLanguage, setAiLanguage,
+    aiVoice, setAiVoice
 }) => {
     const [newOption, setNewOption] = useState('');
     const [activeList, setActiveList] = useState<'expense' | 'income' | 'debt' | 'investment' | 'account'>('expense'); 
@@ -128,8 +136,49 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({
 
       <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 space-y-10">
         
-        {/* Dropdown Manager */}
+        {/* AI Configuration */}
         <div>
+            <h3 className="font-bold text-slate-900 dark:text-white mb-6 flex items-center">
+                <Mic size={18} className="mr-2 text-purple-500"/> AI Assistant Configuration
+            </h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 bg-slate-50 dark:bg-slate-900/50 p-6 rounded-xl border border-slate-200 dark:border-slate-700">
+                <div>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 flex items-center">
+                        <Languages size={16} className="mr-2"/> Response Language
+                    </label>
+                    <select 
+                        value={aiLanguage}
+                        onChange={(e) => setAiLanguage(e.target.value)}
+                        className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                    >
+                        <option value="English">English</option>
+                        <option value="Hindi">Hindi (हिंदी)</option>
+                        <option value="Bengali">Bengali (বাংলা)</option>
+                    </select>
+                    <p className="text-xs text-slate-500 mt-2">The AI will strictly respond in this language only.</p>
+                </div>
+                <div>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2 flex items-center">
+                        <Mic size={16} className="mr-2"/> Voice Persona
+                    </label>
+                    <select 
+                        value={aiVoice}
+                        onChange={(e) => setAiVoice(e.target.value)}
+                        className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-purple-500 outline-none"
+                    >
+                        <option value="Puck">Puck (Male)</option>
+                        <option value="Charon">Charon (Male)</option>
+                        <option value="Kore">Kore (Female)</option>
+                        <option value="Fenrir">Fenrir (Male)</option>
+                        <option value="Zephyr">Zephyr (Female)</option>
+                    </select>
+                    <p className="text-xs text-slate-500 mt-2">Select the voice tone for the floating assistant.</p>
+                </div>
+            </div>
+        </div>
+
+        {/* Dropdown Manager */}
+        <div className="border-t border-slate-100 dark:border-slate-700 pt-8">
             <h3 className="font-bold text-slate-900 dark:text-white mb-6 flex items-center"><List size={18} className="mr-2 text-blue-500"/> Manage Dropdown Options</h3>
             
             <div className="flex flex-wrap gap-2 mb-6">

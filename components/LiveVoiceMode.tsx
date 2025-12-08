@@ -7,12 +7,14 @@ interface LiveVoiceModeProps {
   apiKey: string;
   systemInstruction: string;
   isCompact?: boolean; // New prop to adjust layout for floating mode
+  voiceName?: string; // New prop for selecting voice
 }
 
-const LiveVoiceMode: React.FC<LiveVoiceModeProps> = ({ apiKey, systemInstruction, isCompact = false }) => {
+const LiveVoiceMode: React.FC<LiveVoiceModeProps> = ({ apiKey, systemInstruction, isCompact = false, voiceName = 'Zephyr' }) => {
   const [isActive, setIsActive] = useState(false);
   const [status, setStatus] = useState<'disconnected' | 'connecting' | 'connected' | 'error'>('disconnected');
   const [volumeLevel, setVolumeLevel] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
 
   // Refs for audio processing to avoid re-renders and stale closures
   const audioContextRef = useRef<AudioContext | null>(null);
@@ -48,6 +50,16 @@ const LiveVoiceMode: React.FC<LiveVoiceModeProps> = ({ apiKey, systemInstruction
     animationRef.current = requestAnimationFrame(visualizeVolume);
   };
 
+  const toggleMute = () => {
+    if (streamRef.current) {
+        const newMutedState = !isMuted;
+        streamRef.current.getAudioTracks().forEach(track => {
+            track.enabled = !newMutedState;
+        });
+        setIsMuted(newMutedState);
+    }
+  };
+
   const startSession = async () => {
     if (!apiKey) {
       alert("API Key is missing.");
@@ -56,6 +68,7 @@ const LiveVoiceMode: React.FC<LiveVoiceModeProps> = ({ apiKey, systemInstruction
 
     try {
       setStatus('connecting');
+      setIsMuted(false);
       
       // 1. Initialize Audio Contexts
       const AudioContextClass = window.AudioContext || (window as any).webkitAudioContext;
@@ -76,6 +89,9 @@ const LiveVoiceMode: React.FC<LiveVoiceModeProps> = ({ apiKey, systemInstruction
         config: {
           responseModalities: [Modality.AUDIO],
           systemInstruction: systemInstruction,
+          speechConfig: {
+              voiceConfig: { prebuiltVoiceConfig: { voiceName: voiceName } }
+          }
         },
         callbacks: {
           onopen: () => {
@@ -171,6 +187,7 @@ const LiveVoiceMode: React.FC<LiveVoiceModeProps> = ({ apiKey, systemInstruction
   const stopSession = () => {
     setStatus('disconnected');
     setIsActive(false);
+    setIsMuted(false);
 
     if (animationRef.current) cancelAnimationFrame(animationRef.current);
 
@@ -215,17 +232,21 @@ const LiveVoiceMode: React.FC<LiveVoiceModeProps> = ({ apiKey, systemInstruction
        <div className={`relative ${isCompact ? 'mb-4' : 'mb-8'}`}>
           {/* Visualizer Circle */}
           <div 
-             className={`rounded-full flex items-center justify-center transition-all duration-100 ease-out ${isActive ? 'bg-blue-600 shadow-[0_0_40px_rgba(37,99,235,0.5)]' : 'bg-slate-200 dark:bg-slate-700'}`}
+             className={`rounded-full flex items-center justify-center transition-all duration-100 ease-out ${isActive ? (isMuted ? 'bg-slate-300 dark:bg-slate-600' : 'bg-blue-600 shadow-[0_0_40px_rgba(37,99,235,0.5)]') : 'bg-slate-200 dark:bg-slate-700'}`}
              style={{ 
                  width: isCompact ? '80px' : '120px',
                  height: isCompact ? '80px' : '120px',
-                 transform: isActive ? `scale(${1 + (volumeLevel / 100)})` : 'scale(1)' 
+                 transform: isActive && !isMuted ? `scale(${1 + (volumeLevel / 100)})` : 'scale(1)' 
              }}
           >
-             {isActive ? <Mic size={isCompact ? 32 : 48} className="text-white" /> : <MicOff size={isCompact ? 32 : 48} className="text-slate-400" />}
+             {isActive ? (
+                isMuted ? <MicOff size={isCompact ? 32 : 48} className="text-slate-500 dark:text-slate-400" /> : <Mic size={isCompact ? 32 : 48} className="text-white" />
+             ) : (
+                <MicOff size={isCompact ? 32 : 48} className="text-slate-400" />
+             )}
           </div>
           {/* Ripple Effect */}
-          {isActive && (
+          {isActive && !isMuted && (
              <>
                 <div className="absolute inset-0 rounded-full border-2 border-blue-500 opacity-50 animate-ping"></div>
                 <div className="absolute inset-0 rounded-full border border-blue-400 opacity-30 animate-[ping_1.5s_ease-in-out_infinite]"></div>
@@ -234,13 +255,13 @@ const LiveVoiceMode: React.FC<LiveVoiceModeProps> = ({ apiKey, systemInstruction
        </div>
 
        <h2 className={`${isCompact ? 'text-xl' : 'text-3xl'} font-bold text-slate-900 dark:text-white mb-2`}>
-         {status === 'connected' ? 'Listening...' : status === 'connecting' ? 'Connecting...' : status === 'error' ? 'Connection Error' : 'Voice Assistant'}
+         {status === 'connected' ? (isMuted ? 'Mic Muted' : 'Listening...') : status === 'connecting' ? 'Connecting...' : status === 'error' ? 'Connection Error' : 'Voice Assistant'}
        </h2>
        
        {!isCompact && (
         <p className="text-slate-500 mb-8 max-w-md">
             {status === 'connected' 
-            ? "Go ahead, ask me about your finances, transactions, or net worth."
+            ? (isMuted ? "Tap un-mute to resume conversation." : "Go ahead, ask me about your finances, transactions, or net worth.")
             : "Start a real-time voice conversation with your AI financial advisor."}
         </p>
        )}
@@ -257,26 +278,39 @@ const LiveVoiceMode: React.FC<LiveVoiceModeProps> = ({ apiKey, systemInstruction
          </div>
        )}
 
-       <button
-         onClick={isActive ? stopSession : startSession}
-         className={`rounded-full font-bold shadow-xl transition-all transform hover:scale-105 flex items-center justify-center ${
-            isCompact ? 'px-6 py-3 text-sm' : 'px-8 py-4 text-lg'
-         } ${
-            isActive 
-            ? 'bg-red-500 text-white hover:bg-red-600 shadow-red-500/30' 
-            : 'bg-blue-600 text-white hover:bg-blue-700 shadow-blue-500/30'
-         }`}
-       >
-         {isActive ? (
-             <>
-               <Radio size={isCompact ? 18 : 24} className="mr-2 animate-pulse"/> {isCompact ? 'End' : 'End Session'}
-             </>
-         ) : (
-             <>
-               <Mic size={isCompact ? 18 : 24} className="mr-2"/> {isCompact ? 'Speak' : 'Start Voice Chat'}
-             </>
-         )}
-       </button>
+       {isActive ? (
+           <div className="flex items-center gap-4">
+                <button
+                    onClick={toggleMute}
+                    className={`rounded-full p-4 md:p-4 shadow-lg transition-all transform hover:scale-105 flex items-center justify-center ${
+                        isMuted 
+                        ? 'bg-slate-700 text-white hover:bg-slate-800' 
+                        : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 dark:bg-slate-800 dark:text-white dark:border-slate-700'
+                    }`}
+                    title={isMuted ? "Unmute Microphone" : "Mute Microphone"}
+                >
+                    {isMuted ? <MicOff size={isCompact ? 20 : 24} /> : <Mic size={isCompact ? 20 : 24} />}
+                </button>
+
+                <button
+                    onClick={stopSession}
+                    className={`rounded-full font-bold shadow-xl transition-all transform hover:scale-105 flex items-center justify-center ${
+                        isCompact ? 'px-6 py-3 text-sm' : 'px-8 py-4 text-lg'
+                    } bg-red-500 text-white hover:bg-red-600 shadow-red-500/30`}
+                >
+                    <Radio size={isCompact ? 18 : 24} className="mr-2 animate-pulse"/> {isCompact ? 'End' : 'End Session'}
+                </button>
+           </div>
+       ) : (
+        <button
+            onClick={startSession}
+            className={`rounded-full font-bold shadow-xl transition-all transform hover:scale-105 flex items-center justify-center ${
+                isCompact ? 'px-6 py-3 text-sm' : 'px-8 py-4 text-lg'
+            } bg-blue-600 text-white hover:bg-blue-700 shadow-blue-500/30`}
+        >
+            <Mic size={isCompact ? 18 : 24} className="mr-2"/> {isCompact ? 'Speak' : 'Start Voice Chat'}
+        </button>
+       )}
        
        <div className={`mt-auto flex items-center text-xs text-slate-400 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-full border border-slate-200 dark:border-slate-700 ${isCompact ? 'mt-6' : 'mt-8'}`}>
            <Volume2 size={12} className="mr-2" />

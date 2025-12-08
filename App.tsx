@@ -31,6 +31,10 @@ export default function App() {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [lastSaved, setLastSaved] = useState<Date | null>(null);
   
+  // AI Settings
+  const [aiLanguage, setAiLanguage] = useState<string>('English');
+  const [aiVoice, setAiVoice] = useState<string>('Zephyr');
+
   const [appMetadata, setAppMetadata] = useState<AppMetadata>({
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString()
@@ -76,6 +80,11 @@ export default function App() {
         setDebtTypes(parsed.debtTypes || DEFAULT_DEBT_TYPES);
         setInvestmentTypes(parsed.investmentTypes || DEFAULT_INVESTMENT_TYPES);
         setAccountTypes(parsed.accountTypes || DEFAULT_ACCOUNT_TYPES);
+        
+        // Restore AI settings
+        setAiLanguage(parsed.aiLanguage || 'English');
+        setAiVoice(parsed.aiVoice || 'Zephyr');
+
         // Restore view if exists
         if (parsed.view) setView(parsed.view);
       } catch (e) {
@@ -100,11 +109,12 @@ export default function App() {
         accounts, transactions, goals, investments, debts, theme, 
         incomeCategories, expenseCategories, debtTypes, investmentTypes, accountTypes,
         appMetadata: newMetadata,
-        view // Save current view
+        view, // Save current view
+        aiLanguage, aiVoice // Save AI settings
     };
     localStorage.setItem('finance_app_data_v10', JSON.stringify(dataToSave));
     setLastSaved(new Date());
-  }, [accounts, transactions, goals, investments, debts, theme, incomeCategories, expenseCategories, debtTypes, investmentTypes, accountTypes, view]);
+  }, [accounts, transactions, goals, investments, debts, theme, incomeCategories, expenseCategories, debtTypes, investmentTypes, accountTypes, view, aiLanguage, aiVoice]);
 
   const totalWalletBalance = accounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
   const totalInvestmentValue = investments.reduce((sum, inv) => sum + (inv.investedAmount || 0), 0);
@@ -135,11 +145,12 @@ export default function App() {
 
   const floatingSystemPrompt = `You are FinTrackPro's smart voice assistant. User's financial data: ${JSON.stringify(aiContext)}. 
   
-  LANGUAGE INSTRUCTIONS:
-  - You support English, Hindi (Devanagari/Hinglish), and Bengali.
-  - Listen carefully to the user's language and respond in the SAME language.
-  - If the user speaks Hindi, reply in Hindi. If Bengali, reply in Bengali.
-  - Keep responses concise, friendly, and helpful.`;
+  CRITICAL RULES:
+  1. LANGUAGE: You must speak ONLY in ${aiLanguage}. Even if the user speaks another language, reply strictly in ${aiLanguage}.
+  2. DATA ACCESS: You have READ-ONLY access. 
+  3. DENY DATA ENTRY: If the user asks you to add, edit, or delete a transaction, account, or any data (e.g., "Add 500 for lunch", "Create a new goal"), you MUST REFUSE. 
+     - Say exactly: "I cannot modify your data directly. Please use the manual buttons in the app to add this."
+  4. Keep responses concise, friendly, and helpful.`;
 
   const handleConfirmAction = (title: string, message: string, action: () => void, type: 'delete' | 'update' = 'delete') => {
     setModalConfig({ isOpen: true, title, message, onConfirm: action, actionType: type });
@@ -325,7 +336,7 @@ export default function App() {
   };
 
   const exportToJSON = () => {
-    const dataStr = JSON.stringify({ accounts, transactions, goals, investments, debts, theme, incomeCategories, expenseCategories, debtTypes, investmentTypes, accountTypes, appMetadata }, null, 2);
+    const dataStr = JSON.stringify({ accounts, transactions, goals, investments, debts, theme, incomeCategories, expenseCategories, debtTypes, investmentTypes, accountTypes, appMetadata, aiLanguage, aiVoice }, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
     const linkElement = document.createElement('a');
     linkElement.setAttribute('href', dataUri);
@@ -395,7 +406,7 @@ export default function App() {
       {isMobileMenuOpen && <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-40 md:hidden" onClick={() => setIsMobileMenuOpen(false)}></div>}
       
       {/* Floating Assistant Component */}
-      <FloatingAssistant apiKey={process.env.API_KEY} systemInstruction={floatingSystemPrompt} />
+      <FloatingAssistant apiKey={process.env.API_KEY} systemInstruction={floatingSystemPrompt} voiceName={aiVoice} />
 
       <div className="flex-1 flex flex-col h-screen overflow-hidden">
         <header className="bg-white/80 dark:bg-slate-800/80 backdrop-blur-md shadow-sm z-10 px-6 py-4 flex justify-between items-center border-b border-slate-200 dark:border-slate-800 sticky top-0">
@@ -447,7 +458,7 @@ export default function App() {
             </div>
 
             <div className={view === 'ai' ? 'block' : 'hidden'}>
-                <AIModule setView={setView} transactions={transactions} accounts={accounts} investments={investments} debts={debts} goals={goals} totalNetWorth={totalNetWorth} totalDebtValue={totalDebtValue} monthlyMetrics={monthlyMetrics} appMetadata={appMetadata} incomeCategories={incomeCategories} expenseCategories={expenseCategories} accountTypes={accountTypes} investmentTypes={investmentTypes} debtTypes={debtTypes} />
+                <AIModule setView={setView} transactions={transactions} accounts={accounts} investments={investments} debts={debts} goals={goals} totalNetWorth={totalNetWorth} totalDebtValue={totalDebtValue} monthlyMetrics={monthlyMetrics} appMetadata={appMetadata} incomeCategories={incomeCategories} expenseCategories={expenseCategories} accountTypes={accountTypes} investmentTypes={investmentTypes} debtTypes={debtTypes} aiLanguage={aiLanguage} aiVoice={aiVoice} />
             </div>
 
             {view === 'settings' && <SettingsModule theme={theme} setTheme={setTheme} exportData={exportToJSON} importData={(event) => {
@@ -461,11 +472,15 @@ export default function App() {
                         const parsed = JSON.parse(result);
                         if (parsed.accounts && parsed.transactions) {
                             setAccounts(parsed.accounts); setTransactions(parsed.transactions); setGoals(parsed.goals || INITIAL_GOALS); setInvestments(parsed.investments || []); setDebts(parsed.debts || []); setTheme(parsed.theme || 'dark'); setAppMetadata(parsed.appMetadata || { createdAt: new Date().toISOString(), lastModified: new Date().toISOString() }); setIncomeCategories(parsed.incomeCategories || DEFAULT_INCOME_CATEGORIES); setExpenseCategories(parsed.expenseCategories || DEFAULT_EXPENSE_CATEGORIES); setDebtTypes(parsed.debtTypes || DEFAULT_DEBT_TYPES); setInvestmentTypes(parsed.investmentTypes || DEFAULT_INVESTMENT_TYPES); setAccountTypes(parsed.accountTypes || DEFAULT_ACCOUNT_TYPES);
+                            // Restore AI Settings
+                            if(parsed.aiLanguage) setAiLanguage(parsed.aiLanguage);
+                            if(parsed.aiVoice) setAiVoice(parsed.aiVoice);
+                            
                             alert("Backup restored successfully!");
                         }
                     } catch (err) { alert("Invalid backup file."); }
                 };
-            }} exportToExcel={exportToExcel} resetData={resetData} incomeCategories={incomeCategories} setIncomeCategories={setIncomeCategories} expenseCategories={expenseCategories} setExpenseCategories={setExpenseCategories} debtTypes={debtTypes} setDebtTypes={setDebtTypes} investmentTypes={investmentTypes} setInvestmentTypes={setInvestmentTypes} accountTypes={accountTypes} setAccountTypes={setAccountTypes} />}
+            }} exportToExcel={exportToExcel} resetData={resetData} incomeCategories={incomeCategories} setIncomeCategories={setIncomeCategories} expenseCategories={expenseCategories} setExpenseCategories={setExpenseCategories} debtTypes={debtTypes} setDebtTypes={setDebtTypes} investmentTypes={investmentTypes} setInvestmentTypes={setInvestmentTypes} accountTypes={accountTypes} setAccountTypes={setAccountTypes} aiLanguage={aiLanguage} setAiLanguage={setAiLanguage} aiVoice={aiVoice} setAiVoice={setAiVoice} />}
           </div>
         </main>
       </div>

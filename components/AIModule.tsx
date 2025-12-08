@@ -23,12 +23,15 @@ interface AIModuleProps {
     accountTypes: string[];
     investmentTypes: string[];
     debtTypes: string[];
+    aiLanguage: string;
+    aiVoice: string;
 }
 
 const AIModule: React.FC<AIModuleProps> = ({ 
     setView, transactions, accounts, investments, debts, goals, 
     totalNetWorth, totalDebtValue, monthlyMetrics, appMetadata, 
-    incomeCategories, expenseCategories, accountTypes, investmentTypes, debtTypes 
+    incomeCategories, expenseCategories, accountTypes, investmentTypes, debtTypes,
+    aiLanguage, aiVoice
 }) => {
     const [mode, setMode] = useState<'text' | 'voice'>('text');
     const [messages, setMessages] = useState<{role: 'user' | 'ai', content: string}[]>([]);
@@ -46,9 +49,20 @@ const AIModule: React.FC<AIModuleProps> = ({
     );
     
     // System instructions tailored for mode
-    const textSystemPrompt = `You are the AI Financial Advisor for the FinTrackPro app. You have FULL access to the user's application metadata and financial records. Here is the complete application state in JSON format: ${JSON.stringify(contextData)}. Answer questions about the user's financial health, app usage history, or data customization. Be concise, professional, and helpful. Format currency in INR (₹).`;
+    const textSystemPrompt = `You are the AI Financial Advisor for the FinTrackPro app. You have READ-ONLY access to the user's application metadata and financial records. Here is the complete application state in JSON format: ${JSON.stringify(contextData)}. 
+    
+    RULES:
+    1. Answer questions about the user's financial health, app usage history, or data customization.
+    2. Format currency in INR (₹).
+    3. LANGUAGE: Respond ONLY in ${aiLanguage}.
+    4. DENY DATA ENTRY: You CANNOT add, edit, or delete any data (transactions, accounts, etc.). If the user asks to add a transaction or modify data, politely decline and instruct them to use the app's manual buttons.`;
 
-    const voiceSystemPrompt = `You are FinTrackPro's Voice Assistant. You have access to the user's finances: ${JSON.stringify(contextData)}. Keep your responses conversational, concise, and friendly. Do not read out long lists of data. Summarize key insights (e.g., total net worth, recent spending trends). Speak naturally. You are fluent in English, Hindi, and Bengali. Detect the user's language and respond in the same language.`;
+    const voiceSystemPrompt = `You are FinTrackPro's Voice Assistant. You have access to the user's finances: ${JSON.stringify(contextData)}. 
+    
+    RULES:
+    1. Speak naturally and keep responses concise. Do not read out long lists of data.
+    2. LANGUAGE: Speak ONLY in ${aiLanguage}. Even if the user speaks another language, reply strictly in ${aiLanguage}.
+    3. DENY DATA ENTRY: You CANNOT add or modify data. If asked to add/edit data, refuse politely and direct the user to the manual buttons.`;
 
     const handleSend = async () => {
       if (!input.trim() || !apiKey) return;
@@ -120,7 +134,7 @@ const AIModule: React.FC<AIModuleProps> = ({
         </div>
         
         {mode === 'voice' ? (
-            <LiveVoiceMode apiKey={apiKey} systemInstruction={voiceSystemPrompt} />
+            <LiveVoiceMode apiKey={apiKey} systemInstruction={voiceSystemPrompt} voiceName={aiVoice} />
         ) : (
             <>
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-slate-50/50 dark:bg-transparent">

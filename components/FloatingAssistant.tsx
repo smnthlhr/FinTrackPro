@@ -5,9 +5,10 @@ import LiveVoiceMode from './LiveVoiceMode';
 interface FloatingAssistantProps {
     apiKey: string | undefined;
     systemInstruction: string;
+    voiceName?: string;
 }
 
-const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ apiKey, systemInstruction }) => {
+const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ apiKey, systemInstruction, voiceName }) => {
     const [isOpen, setIsOpen] = useState(false);
 
     if (!apiKey) return null; // Don't show if no API key
@@ -36,6 +37,7 @@ const FloatingAssistant: React.FC<FloatingAssistantProps> = ({ apiKey, systemIns
                             apiKey={apiKey} 
                             systemInstruction={systemInstruction} 
                             isCompact={true}
+                            voiceName={voiceName}
                         />
                     </div>
                 </div>
