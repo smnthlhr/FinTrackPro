@@ -30,7 +30,7 @@ const InvestmentsModule: React.FC<InvestmentsModuleProps> = ({
     const [actionAmount, setActionAmount] = useState('');
     const [actionDate, setActionDate] = useState(new Date().toISOString().split('T')[0]);
     const [actionAccount, setActionAccount] = useState('');
-    const [editDetails, setEditDetails] = useState<{name: string, type: string, sip: string}>({ name: '', type: '', sip: '' });
+    const [editDetails, setEditDetails] = useState<{name: string, type: string, sip: string, amount: string}>({ name: '', type: '', sip: '', amount: '' });
 
     const handleAddInv = () => {
         if(!newInv.name || !amountInput) return;
@@ -63,7 +63,7 @@ const InvestmentsModule: React.FC<InvestmentsModuleProps> = ({
     const openManageModal = (inv: Investment) => {
         setManageModalOpen(inv.id);
         setActiveTab('details');
-        setEditDetails({ name: inv.name, type: inv.type, sip: String(inv.sipAmount || 0) });
+        setEditDetails({ name: inv.name, type: inv.type, sip: String(inv.sipAmount || 0), amount: String(inv.investedAmount) });
         setActionAmount('');
         setActionAccount(accounts[0]?.id || '');
         setActionDate(new Date().toISOString().split('T')[0]);
@@ -71,8 +71,42 @@ const InvestmentsModule: React.FC<InvestmentsModuleProps> = ({
 
     const handleUpdateDetails = () => {
         if (!manageModalOpen || !editDetails.name) return;
-        setInvestments(investments.map(i => i.id === manageModalOpen ? { ...i, name: editDetails.name, type: editDetails.type, sipAmount: parseFloat(editDetails.sip) || 0 } : i));
-        alert("Details updated successfully.");
+        
+        const currentInv = investments.find(i => i.id === manageModalOpen);
+        if (!currentInv) return;
+
+        const newAmount = parseFloat(editDetails.amount);
+        if (isNaN(newAmount) || newAmount < 0) {
+             alert("Please enter a valid positive amount.");
+             return;
+        }
+
+        // Calculate difference for history synchronization
+        const difference = newAmount - currentInv.investedAmount;
+        let newHistory = [...(currentInv.history || [])];
+
+        if (Math.abs(difference) > 0.01) {
+            // Add correction record to keep history synchronized with total
+            newHistory.push({
+                id: generateId(),
+                date: new Date().toISOString().split('T')[0],
+                type: difference > 0 ? 'deposit' : 'withdrawal',
+                amount: Math.abs(difference),
+                note: 'Manual Correction',
+            });
+        }
+
+        const updatedInv = { 
+            ...currentInv, 
+            name: editDetails.name, 
+            type: editDetails.type, 
+            sipAmount: parseFloat(editDetails.sip) || 0,
+            investedAmount: newAmount,
+            history: newHistory
+        };
+
+        setInvestments(investments.map(i => i.id === manageModalOpen ? updatedInv : i));
+        setManageModalOpen(null); // Close modal on success
     };
 
     const handleAddFunds = () => {
@@ -217,7 +251,7 @@ const InvestmentsModule: React.FC<InvestmentsModuleProps> = ({
                                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Asset Name</label>
                                     <input value={editDetails.name} onChange={e => setEditDetails({...editDetails, name: e.target.value})} className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-none"/>
                                 </div>
-                                <div className="grid grid-cols-2 gap-4">
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                                     <div>
                                         <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Type</label>
                                         <select value={editDetails.type} onChange={e => setEditDetails({...editDetails, type: e.target.value})} className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-none">
@@ -225,9 +259,14 @@ const InvestmentsModule: React.FC<InvestmentsModuleProps> = ({
                                         </select>
                                     </div>
                                     <div>
-                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Monthly SIP (Optional)</label>
-                                        <input type="number" value={editDetails.sip} onChange={e => setEditDetails({...editDetails, sip: e.target.value})} className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-none"/>
+                                        <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Total Invested (₹)</label>
+                                        <input type="number" value={editDetails.amount} onChange={e => setEditDetails({...editDetails, amount: e.target.value})} className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-none"/>
+                                        <p className="text-xs text-slate-400 mt-1">Manual correction of total value. History will be auto-adjusted.</p>
                                     </div>
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Monthly SIP (Optional)</label>
+                                    <input type="number" value={editDetails.sip} onChange={e => setEditDetails({...editDetails, sip: e.target.value})} className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-none"/>
                                 </div>
                                 <div className="pt-4">
                                     <button onClick={handleUpdateDetails} className="bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 font-medium shadow-lg shadow-blue-500/20 w-full md:w-auto">Update Details</button>
