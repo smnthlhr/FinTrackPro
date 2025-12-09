@@ -456,7 +456,14 @@ export default function App() {
             </div>
 
             <div className={view === 'investments' ? 'block' : 'hidden'}>
-                <InvestmentsModule investments={investments} setInvestments={setInvestments} investmentTypes={investmentTypes} handleConfirmAction={handleConfirmAction} />
+                <InvestmentsModule 
+                    investments={investments} 
+                    setInvestments={setInvestments} 
+                    investmentTypes={investmentTypes} 
+                    handleConfirmAction={handleConfirmAction} 
+                    accounts={accounts}
+                    handleSaveTransaction={handleSaveTransaction}
+                />
             </div>
 
             <div className={view === 'goals' ? 'block' : 'hidden'}>

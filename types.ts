@@ -24,6 +24,15 @@ export interface Goal {
   deadline: string;
 }
 
+export interface InvestmentHistoryItem {
+  id: string;
+  date: string;
+  type: 'deposit' | 'withdrawal';
+  amount: number;
+  note?: string;
+  accountId?: string; // For withdrawal destination or deposit source
+}
+
 export interface Investment {
   id: string;
   name: string;
@@ -31,6 +40,7 @@ export interface Investment {
   investedAmount: number;
   sipAmount?: number;
   date: string;
+  history?: InvestmentHistoryItem[];
 }
 
 export interface Debt {
