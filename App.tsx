@@ -5,7 +5,7 @@ import {
 } from 'lucide-react';
 
 import { 
-  Account, Transaction, Goal, Investment, Debt, Lending, AppMetadata 
+  Account, Transaction, Goal, Investment, Debt, Lending, AppMetadata, SecurityQA 
 } from './types';
 import { 
   INITIAL_ACCOUNTS, INITIAL_GOALS, INITIAL_DEBTS, 
@@ -40,6 +40,7 @@ export default function App() {
   // Security Settings
   const [appPin, setAppPin] = useState<string | null>(null);
   const [isAppLocked, setIsAppLocked] = useState(false);
+  const [securityQA, setSecurityQA] = useState<SecurityQA[]>([]);
 
   const [appMetadata, setAppMetadata] = useState<AppMetadata>({
       createdAt: new Date().toISOString(),
@@ -96,6 +97,7 @@ export default function App() {
         // Restore Security Settings
         if (parsed.appPin) setAppPin(parsed.appPin);
         if (parsed.isAppLocked) setIsAppLocked(true); 
+        if (parsed.securityQA) setSecurityQA(parsed.securityQA);
 
         if (parsed.view) setView(parsed.view);
       } catch (e) {
@@ -122,11 +124,11 @@ export default function App() {
         appMetadata: newMetadata,
         view,
         aiLanguage, aiVoice,
-        appPin, isAppLocked
+        appPin, isAppLocked, securityQA
     };
     localStorage.setItem('finance_app_data_v10', JSON.stringify(dataToSave));
     setLastSaved(new Date());
-  }, [accounts, transactions, goals, investments, debts, lendings, theme, incomeCategories, expenseCategories, debtTypes, investmentTypes, accountTypes, view, aiLanguage, aiVoice, appPin, isAppLocked]);
+  }, [accounts, transactions, goals, investments, debts, lendings, theme, incomeCategories, expenseCategories, debtTypes, investmentTypes, accountTypes, view, aiLanguage, aiVoice, appPin, isAppLocked, securityQA]);
 
   const totalWalletBalance = accounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
   const totalInvestmentValue = investments.reduce((sum, inv) => sum + (inv.investedAmount || 0), 0);
@@ -177,6 +179,10 @@ export default function App() {
           return true;
       }
       return false;
+  };
+  
+  const handleRecoveryUnlock = () => {
+      setIsAppLocked(false);
   };
 
   const lockApp = () => {
@@ -320,7 +326,7 @@ export default function App() {
         accounts, transactions, goals, investments, debts, lendings, theme, 
         incomeCategories, expenseCategories, debtTypes, investmentTypes, accountTypes, 
         appMetadata, aiLanguage, aiVoice,
-        appPin, isAppLocked 
+        appPin, isAppLocked, securityQA
     }, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
     const linkElement = document.createElement('a');
@@ -337,13 +343,13 @@ export default function App() {
     setInvestmentTypes(DEFAULT_INVESTMENT_TYPES);
     setAccountTypes(DEFAULT_ACCOUNT_TYPES);
     setAppMetadata({ createdAt: new Date().toISOString(), lastModified: new Date().toISOString() });
-    setAppPin(null); setIsAppLocked(false);
+    setAppPin(null); setIsAppLocked(false); setSecurityQA([]);
     localStorage.removeItem('finance_app_data_v10');
     setView('dashboard');
   };
 
   if (isAppLocked && appPin) {
-      return <LockScreen onUnlock={handleUnlock} />;
+      return <LockScreen onUnlock={handleUnlock} securityQA={securityQA} onRecoveryUnlock={handleRecoveryUnlock} />;
   }
 
   return (
@@ -501,6 +507,7 @@ export default function App() {
                                 if(parsed.aiVoice) setAiVoice(parsed.aiVoice);
                                 // Restore Security Settings
                                 if(parsed.appPin) setAppPin(parsed.appPin);
+                                if(parsed.securityQA) setSecurityQA(parsed.securityQA);
                                 
                                 alert("Backup restored successfully!");
                             }
@@ -515,7 +522,7 @@ export default function App() {
                 accountTypes={accountTypes} setAccountTypes={setAccountTypes} 
                 aiLanguage={aiLanguage} setAiLanguage={setAiLanguage} 
                 aiVoice={aiVoice} setAiVoice={setAiVoice} 
-                appPin={appPin} setAppPin={setAppPin}
+                appPin={appPin} setAppPin={setAppPin} setSecurityQA={setSecurityQA}
             />}
           </div>
         </main>

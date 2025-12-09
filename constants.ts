@@ -12,6 +12,17 @@ export const DEFAULT_DEBT_TYPES = ['EMI / Loan', 'Personal / Friends', 'Credit C
 export const DEFAULT_INVESTMENT_TYPES = ['Mutual Fund', 'Stocks', 'Crypto', 'FD', 'Real Estate', 'Gold', 'Bonds'];
 export const DEFAULT_ACCOUNT_TYPES = ['Bank', 'Cash', 'Crypto Wallet', 'Credit Card', 'Digital Wallet'];
 
+export const SECURITY_QUESTIONS = [
+  "What is the name of your first pet?",
+  "What is your mother's maiden name?",
+  "What was the first car you owned?",
+  "What city were you born in?",
+  "What is your favorite food?",
+  "What is the name of your favorite teacher?",
+  "Where did you go for your first vacation?",
+  "What is your father's middle name?"
+];
+
 export const INITIAL_GOALS: Goal[] = [
   { id: 'g1', title: 'Emergency Fund', target: 50000, current: 15000, deadline: '2025-12-31' }
 ];

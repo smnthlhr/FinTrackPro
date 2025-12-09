@@ -1,7 +1,9 @@
 import React, { useState } from 'react';
 import { 
-  List, XCircle, Sun, Moon, Save, FileJson, FileSpreadsheet, Upload, AlertTriangle, Trash2, Download, Mic, Languages, Lock, ShieldCheck, Unlock
+  List, XCircle, Sun, Moon, Save, FileJson, FileSpreadsheet, Upload, AlertTriangle, Trash2, Download, Mic, Languages, Lock, ShieldCheck, Unlock, Key
 } from 'lucide-react';
+import { SECURITY_QUESTIONS } from '../constants';
+import { SecurityQA } from '../types';
 
 interface SettingsModuleProps {
     theme: string;
@@ -30,6 +32,7 @@ interface SettingsModuleProps {
     // Security Settings
     appPin: string | null;
     setAppPin: (pin: string | null) => void;
+    setSecurityQA: (qa: SecurityQA[]) => void;
 }
 
 const SettingsModule: React.FC<SettingsModuleProps> = ({ 
@@ -41,7 +44,7 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({
     accountTypes, setAccountTypes,
     aiLanguage, setAiLanguage,
     aiVoice, setAiVoice,
-    appPin, setAppPin
+    appPin, setAppPin, setSecurityQA
 }) => {
     const [newOption, setNewOption] = useState('');
     const [activeList, setActiveList] = useState<'expense' | 'income' | 'debt' | 'investment' | 'account'>('expense'); 
@@ -50,7 +53,15 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({
     const [resetStep, setResetStep] = useState<'idle' | 'backup-prompt' | 'final-confirm'>('idle');
 
     // Security State
+    const [isSetupOpen, setIsSetupOpen] = useState(false);
+    const [isRemoveVerifyOpen, setIsRemoveVerifyOpen] = useState(false);
     const [newPin, setNewPin] = useState('');
+    const [verifyPin, setVerifyPin] = useState('');
+    const [qaList, setQaList] = useState<SecurityQA[]>([
+        { question: SECURITY_QUESTIONS[0], answer: '' },
+        { question: SECURITY_QUESTIONS[1], answer: '' },
+        { question: SECURITY_QUESTIONS[2], answer: '' }
+    ]);
 
     const getActiveListData = () => {
         switch(activeList) {
@@ -94,20 +105,54 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({
         alert("App has been reset successfully.");
     };
 
-    const handleSetPin = () => {
-        if (newPin.length === 4 && /^\d+$/.test(newPin)) {
-            setAppPin(newPin);
-            setNewPin('');
-            alert("PIN Set Successfully! You can now lock the app from the sidebar.");
-        } else {
+    const handleSaveSecurity = () => {
+        // Validate PIN
+        if (newPin.length !== 4 || !/^\d+$/.test(newPin)) {
             alert("Please enter a valid 4-digit PIN.");
+            return;
+        }
+
+        // Validate Questions
+        const emptyAnswers = qaList.some(qa => !qa.answer.trim());
+        if (emptyAnswers) {
+            alert("Please answer all 3 security questions.");
+            return;
+        }
+
+        setAppPin(newPin);
+        setSecurityQA(qaList);
+        setIsSetupOpen(false);
+        setNewPin('');
+        alert("Security setup complete! You can now lock the app from the sidebar.");
+    };
+
+    const initiateRemovePin = () => {
+        setIsRemoveVerifyOpen(true);
+        setVerifyPin('');
+    };
+
+    const cancelRemovePin = () => {
+        setIsRemoveVerifyOpen(false);
+        setVerifyPin('');
+    };
+
+    const confirmRemovePin = () => {
+        if (verifyPin === appPin) {
+            setAppPin(null);
+            setSecurityQA([]);
+            setIsRemoveVerifyOpen(false);
+            setVerifyPin('');
+            alert("App security has been disabled.");
+        } else {
+            alert("Incorrect PIN. Cannot remove security.");
+            setVerifyPin('');
         }
     };
 
-    const handleRemovePin = () => {
-        if (window.confirm("Are you sure you want to remove the PIN?")) {
-            setAppPin(null);
-        }
+    const updateQa = (index: number, field: 'question' | 'answer', value: string) => {
+        const newList = [...qaList];
+        newList[index] = { ...newList[index], [field]: value };
+        setQaList(newList);
     };
 
     return (
@@ -166,34 +211,93 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({
                 <ShieldCheck size={18} className="mr-2 text-blue-500"/> App Security
             </h3>
             <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-xl border border-slate-200 dark:border-slate-700">
-                {appPin ? (
+                {isRemoveVerifyOpen ? (
+                     <div className="space-y-4 animate-in fade-in zoom-in-95">
+                        <div className="flex items-center text-red-600 font-bold mb-2">
+                            <AlertTriangle size={20} className="mr-2" />
+                            Disable Security
+                        </div>
+                        <p className="text-sm text-slate-600 dark:text-slate-400">Please enter your current PIN to confirm removal.</p>
+                        
+                        <input 
+                            type="password" 
+                            value={verifyPin}
+                            onChange={(e) => setVerifyPin(e.target.value.slice(0, 4))}
+                            maxLength={4}
+                            placeholder="Enter Current PIN"
+                            className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-red-500 outline-none tracking-widest text-center text-xl font-bold"
+                            autoFocus
+                        />
+                        
+                        <div className="flex gap-3">
+                             <button onClick={cancelRemovePin} className="flex-1 px-4 py-3 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-xl font-medium hover:bg-slate-300 dark:hover:bg-slate-600 transition-colors">Cancel</button>
+                             <button onClick={confirmRemovePin} className="flex-1 bg-red-600 text-white px-4 py-3 rounded-xl hover:bg-red-700 font-medium shadow-lg shadow-red-500/30 transition-colors">Confirm Removal</button>
+                        </div>
+                    </div>
+                ) : appPin && !isSetupOpen ? (
                     <div className="flex justify-between items-center">
                         <div>
                             <div className="flex items-center text-emerald-600 dark:text-emerald-400 font-bold mb-1">
-                                <Lock size={16} className="mr-2" /> App is Protected
+                                <Lock size={16} className="mr-2" /> App Protected
                             </div>
-                            <p className="text-sm text-slate-500">A PIN is currently set. Use the sidebar button to lock the app.</p>
+                            <p className="text-sm text-slate-500">PIN and security questions are set.</p>
                         </div>
-                        <button onClick={handleRemovePin} className="px-4 py-2 bg-white dark:bg-slate-800 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center">
-                             <Unlock size={16} className="mr-2"/> Remove PIN
-                        </button>
+                        <div className="flex gap-2">
+                             <button onClick={() => setIsSetupOpen(true)} className="px-4 py-2 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-600 text-slate-700 dark:text-slate-300 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors flex items-center">
+                                <Key size={16} className="mr-2"/> Change PIN
+                             </button>
+                            <button onClick={initiateRemovePin} className="px-4 py-2 bg-white dark:bg-slate-800 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center">
+                                <Unlock size={16} className="mr-2"/> Remove PIN
+                            </button>
+                        </div>
                     </div>
                 ) : (
-                    <div className="flex flex-col md:flex-row gap-4 items-end">
-                        <div className="flex-1 w-full">
-                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Create App PIN (4 Digits)</label>
-                            <input 
-                                type="password" 
-                                value={newPin}
-                                onChange={(e) => setNewPin(e.target.value.slice(0, 4))}
-                                maxLength={4}
-                                placeholder="Enter 4 digits"
-                                className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none tracking-widest text-center"
-                            />
+                    <div className="space-y-6">
+                         <div className="flex flex-col md:flex-row gap-4 items-end">
+                            <div className="flex-1 w-full">
+                                <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">{appPin ? 'Enter New PIN' : 'Set App PIN'} (4 Digits)</label>
+                                <input 
+                                    type="password" 
+                                    value={newPin}
+                                    onChange={(e) => setNewPin(e.target.value.slice(0, 4))}
+                                    maxLength={4}
+                                    placeholder="Enter 4 digits"
+                                    className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none tracking-widest text-center text-xl font-bold"
+                                />
+                            </div>
                         </div>
-                        <button onClick={handleSetPin} className="w-full md:w-auto px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium transition-colors shadow-lg shadow-blue-500/20">
-                            Set PIN
-                        </button>
+
+                        <div className="border-t border-slate-200 dark:border-slate-600 pt-4">
+                            <h4 className="text-sm font-bold text-slate-900 dark:text-white mb-4">Security Questions (Required for Recovery)</h4>
+                            <div className="space-y-4">
+                                {[0, 1, 2].map(idx => (
+                                    <div key={idx} className="p-4 bg-white dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700">
+                                        <label className="block text-xs font-semibold text-slate-500 uppercase mb-2">Question {idx + 1}</label>
+                                        <select 
+                                            value={qaList[idx].question}
+                                            onChange={(e) => updateQa(idx, 'question', e.target.value)}
+                                            className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white mb-3 text-sm outline-none"
+                                        >
+                                            {SECURITY_QUESTIONS.map(q => <option key={q} value={q}>{q}</option>)}
+                                        </select>
+                                        <input 
+                                            type="text"
+                                            value={qaList[idx].answer}
+                                            onChange={(e) => updateQa(idx, 'answer', e.target.value)}
+                                            placeholder="Your answer"
+                                            className="w-full p-2.5 rounded-lg border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white text-sm outline-none focus:border-blue-500"
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </div>
+                        
+                        <div className="flex gap-3 pt-2">
+                             {appPin && <button onClick={() => setIsSetupOpen(false)} className="px-6 py-3 bg-slate-200 dark:bg-slate-700 text-slate-700 dark:text-white rounded-xl font-medium">Cancel</button>}
+                             <button onClick={handleSaveSecurity} className="flex-1 bg-blue-600 text-white px-6 py-3 rounded-xl hover:bg-blue-700 font-medium transition-colors shadow-lg shadow-blue-500/20">
+                                {appPin ? 'Update Security Settings' : 'Enable Security'}
+                            </button>
+                        </div>
                     </div>
                 )}
             </div>

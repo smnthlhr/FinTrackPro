@@ -60,6 +60,11 @@ export interface Lending {
   status: 'active' | 'settled';
 }
 
+export interface SecurityQA {
+  question: string;
+  answer: string;
+}
+
 export interface AppMetadata {
   createdAt: string;
   lastModified: string;
