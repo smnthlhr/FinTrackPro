@@ -41,6 +41,25 @@ export interface Debt {
   dueDate: string;
 }
 
+export interface Payment {
+  id: string;
+  date: string;
+  amount: number;
+  accountId: string;
+}
+
+export interface Lending {
+  id: string;
+  borrower: string;
+  totalAmount: number;
+  date: string;
+  returnDate: string;
+  interestRate: number;
+  contactDetails: string;
+  payments: Payment[];
+  status: 'active' | 'settled';
+}
+
 export interface AppMetadata {
   createdAt: string;
   lastModified: string;

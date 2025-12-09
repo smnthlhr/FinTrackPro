@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Brain, MessageSquare, Mic } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 import { 
-    Transaction, Account, Investment, Debt, Goal, AppMetadata 
+    Transaction, Account, Investment, Debt, Goal, AppMetadata, Lending 
 } from '../types';
 import { formatDate, generateAIContext } from '../utils';
 import LiveVoiceMode from './LiveVoiceMode';
@@ -14,6 +14,7 @@ interface AIModuleProps {
     investments: Investment[];
     debts: Debt[];
     goals: Goal[];
+    lendings: Lending[];
     totalNetWorth: number;
     totalDebtValue: number;
     monthlyMetrics: any;
@@ -28,7 +29,7 @@ interface AIModuleProps {
 }
 
 const AIModule: React.FC<AIModuleProps> = ({ 
-    setView, transactions, accounts, investments, debts, goals, 
+    setView, transactions, accounts, investments, debts, goals, lendings,
     totalNetWorth, totalDebtValue, monthlyMetrics, appMetadata, 
     incomeCategories, expenseCategories, accountTypes, investmentTypes, debtTypes,
     aiLanguage, aiVoice
@@ -43,7 +44,8 @@ const AIModule: React.FC<AIModuleProps> = ({
 
     // Use shared context generator
     const contextData = generateAIContext(
-        transactions, accounts, investments, debts, goals, appMetadata,
+        transactions, accounts, investments, debts, goals, lendings,
+        appMetadata,
         incomeCategories, expenseCategories, accountTypes, investmentTypes, debtTypes,
         totalNetWorth, totalDebtValue, monthlyMetrics
     );
@@ -103,7 +105,7 @@ const AIModule: React.FC<AIModuleProps> = ({
           </div>
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white mb-2">AI Financial Advisor Unavailable</h2>
           <p className="text-slate-500 mb-8 max-w-md leading-relaxed">
-             The API Key is missing from the environment configuration. Please ensure `process.env.API_KEY` is set.
+             The API Key is missing from the environment configuration. Please ensure \`process.env.API_KEY\` is set.
           </p>
         </div>
       );

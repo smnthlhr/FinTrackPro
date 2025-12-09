@@ -1,4 +1,4 @@
-import { Transaction, Account, Investment, Debt, Goal, AppMetadata } from './types';
+import { Transaction, Account, Investment, Debt, Goal, AppMetadata, Lending } from './types';
 
 export function formatCurrency(amount: number | string | undefined | null): string {
   const val = typeof amount === 'string' ? parseFloat(amount) : amount;
@@ -36,6 +36,7 @@ export function generateAIContext(
     investments: Investment[],
     debts: Debt[],
     goals: Goal[],
+    lendings: Lending[],
     appMetadata: AppMetadata,
     incomeCategories: string[],
     expenseCategories: string[],
@@ -49,6 +50,12 @@ export function generateAIContext(
     const sortedTxns = [...transactions].sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
     const firstTxnDate = sortedTxns.length > 0 ? sortedTxns[0].date : "No transactions yet";
     const lastTxnDate = sortedTxns.length > 0 ? sortedTxns[sortedTxns.length - 1].date : "No transactions yet";
+    
+    // Calculate total money lent out that is yet to be repaid
+    const totalLentActive = lendings.reduce((sum, l) => {
+        const repaid = l.payments.reduce((pSum, p) => pSum + p.amount, 0);
+        return sum + Math.max(0, l.totalAmount - repaid);
+    }, 0);
 
     return {
         meta: {
@@ -61,7 +68,8 @@ export function generateAIContext(
                 accounts: accounts.length,
                 investments: investments.length,
                 debts: debts.length,
-                goals: goals.length
+                goals: goals.length,
+                lendings: lendings.length
             }
         },
         configuration: {
@@ -74,6 +82,7 @@ export function generateAIContext(
         financialSummary: {
             netWorth: totalNetWorth,
             totalLiabilities: totalDebtValue,
+            totalActiveLending: totalLentActive,
             monthlySnapshot: monthlyMetrics
         },
         data: {
@@ -81,6 +90,12 @@ export function generateAIContext(
             investments: investments.map(i => ({ name: i.name, type: i.type, amount: i.investedAmount, date: i.date })),
             debts: debts.map(d => ({ title: d.title, type: d.type, amount: d.amount, dueDate: d.dueDate })),
             goals: goals,
+            activeLendings: lendings.filter(l => l.status === 'active').map(l => ({
+                borrower: l.borrower,
+                originalAmount: l.totalAmount,
+                repaid: l.payments.reduce((s, p) => s + p.amount, 0),
+                returnDate: l.returnDate
+            })),
             recentTransactions: transactions.slice(0, 30), 
             dateRange: { start: firstTxnDate, end: lastTxnDate }
         }

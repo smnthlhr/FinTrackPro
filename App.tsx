@@ -1,11 +1,11 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Wallet, TrendingUp, Target, Settings, Brain, Menu, X, ArrowRightLeft, 
-  CreditCard, Activity, Briefcase, CheckCircle
+  CreditCard, Activity, Briefcase, CheckCircle, Lock, HandCoins
 } from 'lucide-react';
 
 import { 
-  Account, Transaction, Goal, Investment, Debt, AppMetadata 
+  Account, Transaction, Goal, Investment, Debt, Lending, AppMetadata 
 } from './types';
 import { 
   INITIAL_ACCOUNTS, INITIAL_GOALS, INITIAL_DEBTS, 
@@ -24,6 +24,8 @@ import AIModule from './components/AIModule';
 import SettingsModule from './components/SettingsModule';
 import ConfirmationModal from './components/ConfirmationModal';
 import FloatingAssistant from './components/FloatingAssistant';
+import LockScreen from './components/LockScreen';
+import LendingsModule from './components/LendingsModule';
 
 export default function App() {
   const [view, setView] = useState('dashboard'); 
@@ -35,6 +37,10 @@ export default function App() {
   const [aiLanguage, setAiLanguage] = useState<string>('English');
   const [aiVoice, setAiVoice] = useState<string>('Zephyr');
 
+  // Security Settings
+  const [appPin, setAppPin] = useState<string | null>(null);
+  const [isAppLocked, setIsAppLocked] = useState(false);
+
   const [appMetadata, setAppMetadata] = useState<AppMetadata>({
       createdAt: new Date().toISOString(),
       lastModified: new Date().toISOString()
@@ -45,6 +51,7 @@ export default function App() {
   const [goals, setGoals] = useState<Goal[]>(INITIAL_GOALS);
   const [investments, setInvestments] = useState<Investment[]>([]);
   const [debts, setDebts] = useState<Debt[]>(INITIAL_DEBTS);
+  const [lendings, setLendings] = useState<Lending[]>([]);
   
   const [incomeCategories, setIncomeCategories] = useState<string[]>(DEFAULT_INCOME_CATEGORIES);
   const [expenseCategories, setExpenseCategories] = useState<string[]>(DEFAULT_EXPENSE_CATEGORIES);
@@ -73,6 +80,7 @@ export default function App() {
         setGoals(parsed.goals || INITIAL_GOALS);
         setInvestments(parsed.investments || []);
         setDebts(parsed.debts || INITIAL_DEBTS);
+        setLendings(parsed.lendings || []);
         setTheme(parsed.theme || 'dark');
         setAppMetadata(parsed.appMetadata || { createdAt: new Date().toISOString(), lastModified: new Date().toISOString() });
         setIncomeCategories(parsed.incomeCategories || DEFAULT_INCOME_CATEGORIES);
@@ -85,7 +93,10 @@ export default function App() {
         setAiLanguage(parsed.aiLanguage || 'English');
         setAiVoice(parsed.aiVoice || 'Zephyr');
 
-        // Restore view if exists
+        // Restore Security Settings
+        if (parsed.appPin) setAppPin(parsed.appPin);
+        if (parsed.isAppLocked) setIsAppLocked(true); 
+
         if (parsed.view) setView(parsed.view);
       } catch (e) {
         console.error("Data restore failed", e);
@@ -106,19 +117,23 @@ export default function App() {
   useEffect(() => {
     const newMetadata = { ...appMetadata, lastModified: new Date().toISOString() };
     const dataToSave = { 
-        accounts, transactions, goals, investments, debts, theme, 
+        accounts, transactions, goals, investments, debts, lendings, theme, 
         incomeCategories, expenseCategories, debtTypes, investmentTypes, accountTypes,
         appMetadata: newMetadata,
-        view, // Save current view
-        aiLanguage, aiVoice // Save AI settings
+        view,
+        aiLanguage, aiVoice,
+        appPin, isAppLocked
     };
     localStorage.setItem('finance_app_data_v10', JSON.stringify(dataToSave));
     setLastSaved(new Date());
-  }, [accounts, transactions, goals, investments, debts, theme, incomeCategories, expenseCategories, debtTypes, investmentTypes, accountTypes, view, aiLanguage, aiVoice]);
+  }, [accounts, transactions, goals, investments, debts, lendings, theme, incomeCategories, expenseCategories, debtTypes, investmentTypes, accountTypes, view, aiLanguage, aiVoice, appPin, isAppLocked]);
 
   const totalWalletBalance = accounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
   const totalInvestmentValue = investments.reduce((sum, inv) => sum + (inv.investedAmount || 0), 0);
   const totalDebtValue = debts.reduce((sum, d) => sum + (d.amount || 0), 0);
+  // Net worth usually doesn't count money lent out as cash, but it is an asset.
+  // For simplicity, we can add active lendings to net worth or keep it separate.
+  // Let's keep it separate in dashboard but pass to AI.
   const totalNetWorth = (totalWalletBalance + totalInvestmentValue) - totalDebtValue;
   
   const monthlyMetrics = useMemo(() => {
@@ -138,10 +153,10 @@ export default function App() {
 
   // AI Context for Floating Assistant
   const aiContext = useMemo(() => generateAIContext(
-    transactions, accounts, investments, debts, goals, appMetadata,
+    transactions, accounts, investments, debts, goals, lendings, appMetadata,
     incomeCategories, expenseCategories, accountTypes, investmentTypes, debtTypes,
     totalNetWorth, totalDebtValue, monthlyMetrics
-  ), [transactions, accounts, investments, debts, goals, appMetadata, incomeCategories, expenseCategories, accountTypes, investmentTypes, debtTypes, totalNetWorth, totalDebtValue, monthlyMetrics]);
+  ), [transactions, accounts, investments, debts, goals, lendings, appMetadata, incomeCategories, expenseCategories, accountTypes, investmentTypes, debtTypes, totalNetWorth, totalDebtValue, monthlyMetrics]);
 
   const floatingSystemPrompt = `You are FinTrackPro's smart voice assistant. User's financial data: ${JSON.stringify(aiContext)}. 
   
@@ -154,6 +169,19 @@ export default function App() {
 
   const handleConfirmAction = (title: string, message: string, action: () => void, type: 'delete' | 'update' = 'delete') => {
     setModalConfig({ isOpen: true, title, message, onConfirm: action, actionType: type });
+  };
+
+  const handleUnlock = (pin: string) => {
+      if (pin === appPin) {
+          setIsAppLocked(false);
+          return true;
+      }
+      return false;
+  };
+
+  const lockApp = () => {
+      setIsAppLocked(true);
+      if (isMobileMenuOpen) setIsMobileMenuOpen(false);
   };
 
   const handleSaveTransaction = (txn: Transaction, isEdit = false) => {
@@ -256,7 +284,6 @@ export default function App() {
   };
 
   const exportToExcel = () => {
-    // Helper to generate table HTML
     const createTable = (title: string, headers: string[], rows: (string | number)[][]) => `
       <tr><td colspan="${headers.length}" style="font-size:16px; font-weight:bold; height:30px;">${title}</td></tr>
       <tr>${headers.map(h => `<th style="background:#f0f0f0; font-weight:bold; border:1px solid #ddd;">${h}</th>`).join('')}</tr>
@@ -264,66 +291,19 @@ export default function App() {
       <tr><td></td></tr>
     `;
 
-    // 1. Transactions Data
-    const txnRows = transactions.map(t => {
-        let accName = accounts.find(a=>a.id===t.accountId)?.name || 'Unknown';
-        if (t.type === 'transfer') {
-             const toAccName = accounts.find(a=>a.id===t.toAccountId)?.name || 'Unknown';
-             accName = `${accName} -> ${toAccName}`;
-        }
-        return [t.date, t.type, t.category, t.amount, t.notes || '-', accName];
-    });
-    const txnTable = createTable('Transaction History', ['Date', 'Type', 'Category', 'Amount', 'Notes', 'Account Details'], txnRows);
-
-    // 2. Accounts Data
+    const txnRows = transactions.map(t => [t.date, t.type, t.category, t.amount, t.notes || '-', accounts.find(a=>a.id===t.accountId)?.name || '']);
+    const txnTable = createTable('Transactions', ['Date', 'Type', 'Category', 'Amount', 'Notes', 'Account'], txnRows);
+    
     const accRows = accounts.map(a => [a.name, a.type, a.balance]);
-    const accTable = createTable('Accounts Snapshot', ['Account Name', 'Type', 'Balance'], accRows);
+    const accTable = createTable('Accounts', ['Name', 'Type', 'Balance'], accRows);
+    
+    const lendingRows = lendings.map(l => [l.borrower, l.totalAmount, l.payments.reduce((s,p)=>s+p.amount,0), l.status]);
+    const lendingTable = createTable('Lending', ['Borrower', 'Total Lent', 'Total Repaid', 'Status'], lendingRows);
 
-    // 3. Investments Data
-    const invRows = investments.map(i => [i.date, i.name, i.type, i.investedAmount, i.sipAmount || 0]);
-    const invTable = createTable('Investment Portfolio', ['Date', 'Asset Name', 'Type', 'Invested Amount', 'SIP Amount'], invRows);
-
-    // 4. Debts Data
-    const debtRows = debts.map(d => [d.title, d.type, d.amount, d.dueDate || '-']);
-    const debtTable = createTable('Liabilities & Debts', ['Title', 'Type', 'Amount Owed', 'Due Date'], debtRows);
-
-    // 5. Net Worth Summary
-    const summaryRows = [
-        ['Total Assets (Cash + Investments)', totalWalletBalance + totalInvestmentValue],
-        ['Total Liabilities', totalDebtValue],
-        ['NET WORTH', totalNetWorth]
-    ];
-    const summaryTable = createTable('Financial Summary', ['Metric', 'Value'], summaryRows);
-
-    // Combine into HTML
     const excelHTML = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
-      <head>
-        <!--[if gte mso 9]>
-        <xml>
-          <x:ExcelWorkbook>
-            <x:ExcelWorksheets>
-              <x:ExcelWorksheet>
-                <x:Name>FinTrack Data Export</x:Name>
-                <x:WorksheetOptions>
-                  <x:DisplayGridlines/>
-                </x:WorksheetOptions>
-              </x:ExcelWorksheet>
-            </x:ExcelWorksheets>
-          </x:ExcelWorkbook>
-        </xml>
-        <![endif]-->
-        <meta http-equiv="content-type" content="text/plain; charset=UTF-8"/>
-      </head>
-      <body>
-        <table>
-          ${summaryTable}
-          ${accTable}
-          ${txnTable}
-          ${invTable}
-          ${debtTable}
-        </table>
-      </body>
+      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
+      <head><meta http-equiv="content-type" content="text/plain; charset=UTF-8"/></head>
+      <body><table>${accTable}${lendingTable}${txnTable}</table></body>
       </html>
     `;
 
@@ -336,7 +316,12 @@ export default function App() {
   };
 
   const exportToJSON = () => {
-    const dataStr = JSON.stringify({ accounts, transactions, goals, investments, debts, theme, incomeCategories, expenseCategories, debtTypes, investmentTypes, accountTypes, appMetadata, aiLanguage, aiVoice }, null, 2);
+    const dataStr = JSON.stringify({ 
+        accounts, transactions, goals, investments, debts, lendings, theme, 
+        incomeCategories, expenseCategories, debtTypes, investmentTypes, accountTypes, 
+        appMetadata, aiLanguage, aiVoice,
+        appPin, isAppLocked 
+    }, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
     const linkElement = document.createElement('a');
     linkElement.setAttribute('href', dataUri);
@@ -345,22 +330,21 @@ export default function App() {
   };
 
   const resetData = () => {
-    setAccounts([]);
-    setTransactions([]);
-    setGoals([]);
-    setInvestments([]);
-    setDebts([]);
+    setAccounts([]); setTransactions([]); setGoals([]); setInvestments([]); setDebts([]); setLendings([]);
     setIncomeCategories(DEFAULT_INCOME_CATEGORIES);
     setExpenseCategories(DEFAULT_EXPENSE_CATEGORIES);
     setDebtTypes(DEFAULT_DEBT_TYPES);
     setInvestmentTypes(DEFAULT_INVESTMENT_TYPES);
     setAccountTypes(DEFAULT_ACCOUNT_TYPES);
     setAppMetadata({ createdAt: new Date().toISOString(), lastModified: new Date().toISOString() });
-    
-    // Clear localStorage
+    setAppPin(null); setIsAppLocked(false);
     localStorage.removeItem('finance_app_data_v10');
     setView('dashboard');
   };
+
+  if (isAppLocked && appPin) {
+      return <LockScreen onUnlock={handleUnlock} />;
+  }
 
   return (
     <div className={`min-h-screen flex bg-slate-50 dark:bg-slate-900 transition-colors duration-200 font-sans`}>
@@ -378,11 +362,12 @@ export default function App() {
             <X size={24} />
             </button>
         </div>
-        <nav className="mt-6 px-3 space-y-2">
+        <nav className="mt-6 px-3 space-y-2 flex-1 overflow-y-auto scrollbar-hide">
             {[
             { id: 'dashboard', icon: Briefcase, label: 'Dashboard' },
             { id: 'accounts', icon: Wallet, label: 'Accounts' }, 
             { id: 'debts', icon: CreditCard, label: 'Debts & EMI' },
+            { id: 'lending', icon: HandCoins, label: 'Lending' },
             { id: 'transactions', icon: ArrowRightLeft, label: 'Transactions' },
             { id: 'investments', icon: TrendingUp, label: 'Investments' },
             { id: 'goals', icon: Target, label: 'Goals' },
@@ -399,6 +384,17 @@ export default function App() {
                 {view === item.id && <div className="absolute inset-0 bg-gradient-to-r from-blue-600 to-indigo-600 opacity-100" />}
             </button>
             ))}
+            
+            {/* Lock Button */}
+            {appPin && (
+                <button
+                    onClick={lockApp}
+                    className="flex items-center w-full px-4 py-3 rounded-xl transition-all duration-200 font-medium text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-red-500 dark:hover:text-red-400 mt-4 group"
+                >
+                    <Lock size={20} className="mr-3 text-slate-400 dark:text-slate-500 group-hover:text-red-500 dark:group-hover:text-red-400" />
+                    <span>Lock App</span>
+                </button>
+            )}
         </nav>
       </div>
 
@@ -445,6 +441,10 @@ export default function App() {
                 <DebtsModule debts={debts} setDebts={setDebts} debtTypes={debtTypes} handleConfirmAction={handleConfirmAction} />
             </div>
 
+            <div className={view === 'lending' ? 'block' : 'hidden'}>
+                <LendingsModule lendings={lendings} setLendings={setLendings} accounts={accounts} handleSaveTransaction={handleSaveTransaction} handleConfirmAction={handleConfirmAction} />
+            </div>
+
             <div className={view === 'transactions' ? 'block' : 'hidden'}>
                 <TransactionModule transactions={transactions} setTransactions={setTransactions} accounts={accounts} incomeCategories={incomeCategories} expenseCategories={expenseCategories} handleSaveTransaction={handleSaveTransaction} deleteTransaction={deleteTransaction} handleEditClick={setEditingTxnId} editingTxnId={editingTxnId} showAddTxn={showAddTxn} setShowAddTxn={setShowAddTxn} setEditingTxnId={setEditingTxnId} />
             </div>
@@ -458,29 +458,65 @@ export default function App() {
             </div>
 
             <div className={view === 'ai' ? 'block' : 'hidden'}>
-                <AIModule setView={setView} transactions={transactions} accounts={accounts} investments={investments} debts={debts} goals={goals} totalNetWorth={totalNetWorth} totalDebtValue={totalDebtValue} monthlyMetrics={monthlyMetrics} appMetadata={appMetadata} incomeCategories={incomeCategories} expenseCategories={expenseCategories} accountTypes={accountTypes} investmentTypes={investmentTypes} debtTypes={debtTypes} aiLanguage={aiLanguage} aiVoice={aiVoice} />
+                <AIModule 
+                  setView={setView} 
+                  transactions={transactions} 
+                  accounts={accounts} 
+                  investments={investments} 
+                  debts={debts} 
+                  goals={goals} 
+                  lendings={lendings}
+                  totalNetWorth={totalNetWorth} 
+                  totalDebtValue={totalDebtValue} 
+                  monthlyMetrics={monthlyMetrics} 
+                  appMetadata={appMetadata} 
+                  incomeCategories={incomeCategories} 
+                  expenseCategories={expenseCategories} 
+                  accountTypes={accountTypes} 
+                  investmentTypes={investmentTypes} 
+                  debtTypes={debtTypes} 
+                  aiLanguage={aiLanguage} 
+                  aiVoice={aiVoice} 
+                />
             </div>
 
-            {view === 'settings' && <SettingsModule theme={theme} setTheme={setTheme} exportData={exportToJSON} importData={(event) => {
-                const file = event.target.files?.[0];
-                if (!file) return;
-                const fileReader = new FileReader();
-                fileReader.readAsText(file, "UTF-8");
-                fileReader.onload = e => {
-                    try {
-                        const result = e.target?.result as string;
-                        const parsed = JSON.parse(result);
-                        if (parsed.accounts && parsed.transactions) {
-                            setAccounts(parsed.accounts); setTransactions(parsed.transactions); setGoals(parsed.goals || INITIAL_GOALS); setInvestments(parsed.investments || []); setDebts(parsed.debts || []); setTheme(parsed.theme || 'dark'); setAppMetadata(parsed.appMetadata || { createdAt: new Date().toISOString(), lastModified: new Date().toISOString() }); setIncomeCategories(parsed.incomeCategories || DEFAULT_INCOME_CATEGORIES); setExpenseCategories(parsed.expenseCategories || DEFAULT_EXPENSE_CATEGORIES); setDebtTypes(parsed.debtTypes || DEFAULT_DEBT_TYPES); setInvestmentTypes(parsed.investmentTypes || DEFAULT_INVESTMENT_TYPES); setAccountTypes(parsed.accountTypes || DEFAULT_ACCOUNT_TYPES);
-                            // Restore AI Settings
-                            if(parsed.aiLanguage) setAiLanguage(parsed.aiLanguage);
-                            if(parsed.aiVoice) setAiVoice(parsed.aiVoice);
-                            
-                            alert("Backup restored successfully!");
-                        }
-                    } catch (err) { alert("Invalid backup file."); }
-                };
-            }} exportToExcel={exportToExcel} resetData={resetData} incomeCategories={incomeCategories} setIncomeCategories={setIncomeCategories} expenseCategories={expenseCategories} setExpenseCategories={setExpenseCategories} debtTypes={debtTypes} setDebtTypes={setDebtTypes} investmentTypes={investmentTypes} setInvestmentTypes={setInvestmentTypes} accountTypes={accountTypes} setAccountTypes={setAccountTypes} aiLanguage={aiLanguage} setAiLanguage={setAiLanguage} aiVoice={aiVoice} setAiVoice={setAiVoice} />}
+            {view === 'settings' && <SettingsModule 
+                theme={theme} setTheme={setTheme} exportData={exportToJSON} 
+                importData={(event) => {
+                    const file = event.target.files?.[0];
+                    if (!file) return;
+                    const fileReader = new FileReader();
+                    fileReader.readAsText(file, "UTF-8");
+                    fileReader.onload = e => {
+                        try {
+                            const result = e.target?.result as string;
+                            const parsed = JSON.parse(result);
+                            if (parsed.accounts && parsed.transactions) {
+                                setAccounts(parsed.accounts); setTransactions(parsed.transactions); setGoals(parsed.goals || INITIAL_GOALS); setInvestments(parsed.investments || []); setDebts(parsed.debts || []); setTheme(parsed.theme || 'dark'); setAppMetadata(parsed.appMetadata || { createdAt: new Date().toISOString(), lastModified: new Date().toISOString() }); setIncomeCategories(parsed.incomeCategories || DEFAULT_INCOME_CATEGORIES); setExpenseCategories(parsed.expenseCategories || DEFAULT_EXPENSE_CATEGORIES); setDebtTypes(parsed.debtTypes || DEFAULT_DEBT_TYPES); setInvestmentTypes(parsed.investmentTypes || DEFAULT_INVESTMENT_TYPES); setAccountTypes(parsed.accountTypes || DEFAULT_ACCOUNT_TYPES);
+                                
+                                if(parsed.lendings) setLendings(parsed.lendings);
+
+                                // Restore AI Settings
+                                if(parsed.aiLanguage) setAiLanguage(parsed.aiLanguage);
+                                if(parsed.aiVoice) setAiVoice(parsed.aiVoice);
+                                // Restore Security Settings
+                                if(parsed.appPin) setAppPin(parsed.appPin);
+                                
+                                alert("Backup restored successfully!");
+                            }
+                        } catch (err) { alert("Invalid backup file."); }
+                    };
+                }} 
+                exportToExcel={exportToExcel} resetData={resetData} 
+                incomeCategories={incomeCategories} setIncomeCategories={setIncomeCategories} 
+                expenseCategories={expenseCategories} setExpenseCategories={setExpenseCategories} 
+                debtTypes={debtTypes} setDebtTypes={setDebtTypes} 
+                investmentTypes={investmentTypes} setInvestmentTypes={setInvestmentTypes} 
+                accountTypes={accountTypes} setAccountTypes={setAccountTypes} 
+                aiLanguage={aiLanguage} setAiLanguage={setAiLanguage} 
+                aiVoice={aiVoice} setAiVoice={setAiVoice} 
+                appPin={appPin} setAppPin={setAppPin}
+            />}
           </div>
         </main>
       </div>

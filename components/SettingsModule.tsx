@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { 
-  List, XCircle, Sun, Moon, Save, FileJson, FileSpreadsheet, Upload, AlertTriangle, Trash2, Download, Mic, Languages
+  List, XCircle, Sun, Moon, Save, FileJson, FileSpreadsheet, Upload, AlertTriangle, Trash2, Download, Mic, Languages, Lock, ShieldCheck, Unlock
 } from 'lucide-react';
 
 interface SettingsModuleProps {
@@ -21,11 +21,15 @@ interface SettingsModuleProps {
     accountTypes: string[];
     setAccountTypes: (types: string[]) => void;
     
-    // New Props for AI Settings
+    // AI Settings
     aiLanguage: string;
     setAiLanguage: (lang: string) => void;
     aiVoice: string;
     setAiVoice: (voice: string) => void;
+
+    // Security Settings
+    appPin: string | null;
+    setAppPin: (pin: string | null) => void;
 }
 
 const SettingsModule: React.FC<SettingsModuleProps> = ({ 
@@ -36,13 +40,17 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({
     investmentTypes, setInvestmentTypes, 
     accountTypes, setAccountTypes,
     aiLanguage, setAiLanguage,
-    aiVoice, setAiVoice
+    aiVoice, setAiVoice,
+    appPin, setAppPin
 }) => {
     const [newOption, setNewOption] = useState('');
     const [activeList, setActiveList] = useState<'expense' | 'income' | 'debt' | 'investment' | 'account'>('expense'); 
     
     // Reset Flow State
     const [resetStep, setResetStep] = useState<'idle' | 'backup-prompt' | 'final-confirm'>('idle');
+
+    // Security State
+    const [newPin, setNewPin] = useState('');
 
     const getActiveListData = () => {
         switch(activeList) {
@@ -84,6 +92,22 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({
         resetData();
         setResetStep('idle');
         alert("App has been reset successfully.");
+    };
+
+    const handleSetPin = () => {
+        if (newPin.length === 4 && /^\d+$/.test(newPin)) {
+            setAppPin(newPin);
+            setNewPin('');
+            alert("PIN Set Successfully! You can now lock the app from the sidebar.");
+        } else {
+            alert("Please enter a valid 4-digit PIN.");
+        }
+    };
+
+    const handleRemovePin = () => {
+        if (window.confirm("Are you sure you want to remove the PIN?")) {
+            setAppPin(null);
+        }
     };
 
     return (
@@ -136,8 +160,47 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({
 
       <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 space-y-10">
         
-        {/* AI Configuration */}
+        {/* Security Settings */}
         <div>
+            <h3 className="font-bold text-slate-900 dark:text-white mb-6 flex items-center">
+                <ShieldCheck size={18} className="mr-2 text-blue-500"/> App Security
+            </h3>
+            <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-xl border border-slate-200 dark:border-slate-700">
+                {appPin ? (
+                    <div className="flex justify-between items-center">
+                        <div>
+                            <div className="flex items-center text-emerald-600 dark:text-emerald-400 font-bold mb-1">
+                                <Lock size={16} className="mr-2" /> App is Protected
+                            </div>
+                            <p className="text-sm text-slate-500">A PIN is currently set. Use the sidebar button to lock the app.</p>
+                        </div>
+                        <button onClick={handleRemovePin} className="px-4 py-2 bg-white dark:bg-slate-800 border border-red-200 dark:border-red-900 text-red-600 dark:text-red-400 rounded-lg hover:bg-red-50 dark:hover:bg-red-900/20 transition-colors flex items-center">
+                             <Unlock size={16} className="mr-2"/> Remove PIN
+                        </button>
+                    </div>
+                ) : (
+                    <div className="flex flex-col md:flex-row gap-4 items-end">
+                        <div className="flex-1 w-full">
+                            <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Create App PIN (4 Digits)</label>
+                            <input 
+                                type="password" 
+                                value={newPin}
+                                onChange={(e) => setNewPin(e.target.value.slice(0, 4))}
+                                maxLength={4}
+                                placeholder="Enter 4 digits"
+                                className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none tracking-widest text-center"
+                            />
+                        </div>
+                        <button onClick={handleSetPin} className="w-full md:w-auto px-6 py-3 bg-blue-600 text-white rounded-xl hover:bg-blue-700 font-medium transition-colors shadow-lg shadow-blue-500/20">
+                            Set PIN
+                        </button>
+                    </div>
+                )}
+            </div>
+        </div>
+
+        {/* AI Configuration */}
+        <div className="border-t border-slate-100 dark:border-slate-700 pt-8">
             <h3 className="font-bold text-slate-900 dark:text-white mb-6 flex items-center">
                 <Mic size={18} className="mr-2 text-purple-500"/> AI Assistant Configuration
             </h3>
