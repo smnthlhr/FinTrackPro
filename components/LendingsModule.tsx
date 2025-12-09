@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, User, Phone, Calendar, Percent, CheckCircle, ArrowDownLeft, Wallet, Trash2 } from 'lucide-react';
+import { Plus, User, Phone, Calendar, Percent, CheckCircle, ArrowDownLeft, Wallet, Trash2, Info } from 'lucide-react';
 import { Lending, Account, Transaction } from '../types';
 import { generateId, formatCurrency } from '../utils';
 
@@ -18,6 +18,7 @@ const LendingsModule: React.FC<LendingsModuleProps> = ({
     const [repayModalOpen, setRepayModalOpen] = useState<string | null>(null); // holds lending ID
 
     // New Lending Form State
+    const [isOldLending, setIsOldLending] = useState(false);
     const [newLending, setNewLending] = useState({
         borrower: '',
         amount: '',
@@ -36,8 +37,13 @@ const LendingsModule: React.FC<LendingsModuleProps> = ({
     });
 
     const handleCreateLending = () => {
-        if (!newLending.borrower || !newLending.amount || !newLending.sourceAccountId) {
-            alert("Please fill in borrower, amount, and source account.");
+        if (!newLending.borrower || !newLending.amount) {
+            alert("Please fill in borrower and amount.");
+            return;
+        }
+
+        if (!isOldLending && !newLending.sourceAccountId) {
+            alert("Please select a source account to deduct funds from.");
             return;
         }
 
@@ -63,20 +69,23 @@ const LendingsModule: React.FC<LendingsModuleProps> = ({
         // 1. Add Lending Record
         setLendings([...lendings, newRecord]);
 
-        // 2. Create Deduction Transaction
-        const txn: Transaction = {
-            id: generateId(),
-            amount: amount,
-            type: 'expense',
-            category: 'Lending', // System category
-            accountId: newLending.sourceAccountId,
-            date: newLending.date,
-            notes: `Lent to ${newLending.borrower}`
-        };
-        handleSaveTransaction(txn);
+        // 2. Create Deduction Transaction (Only if not old lending)
+        if (!isOldLending) {
+            const txn: Transaction = {
+                id: generateId(),
+                amount: amount,
+                type: 'expense',
+                category: 'Lending', // System category
+                accountId: newLending.sourceAccountId,
+                date: newLending.date,
+                notes: `Lent to ${newLending.borrower}`
+            };
+            handleSaveTransaction(txn);
+        }
 
         // Reset
         setIsAdding(false);
+        setIsOldLending(false);
         setNewLending({
             borrower: '',
             amount: '',
@@ -130,7 +139,7 @@ const LendingsModule: React.FC<LendingsModuleProps> = ({
     };
 
     const deleteLending = (id: string) => {
-        handleConfirmAction("Delete Lending Record", "Warning: This will only remove the record from this list. It will NOT revert the transactions (money deducted/added) from your accounts. You must manually delete those transactions if needed.", () => {
+        handleConfirmAction("Delete Lending Record", "Warning: This will only remove the record from this list. It will NOT revert any associated transactions. You must manually delete transactions if needed.", () => {
             setLendings(lendings.filter(l => l.id !== id));
         });
     };
@@ -196,6 +205,22 @@ const LendingsModule: React.FC<LendingsModuleProps> = ({
                 <div className="bg-white dark:bg-slate-800 p-6 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 grid grid-cols-1 md:grid-cols-2 gap-4 animate-in fade-in-down">
                     <h3 className="col-span-1 md:col-span-2 text-lg font-bold text-slate-900 dark:text-white border-b border-slate-100 dark:border-slate-700 pb-2 mb-2">New Lending Record</h3>
                     
+                    <div className="md:col-span-2 bg-blue-50 dark:bg-blue-900/20 p-4 rounded-xl flex items-start gap-3">
+                         <div className="pt-0.5"><Info size={18} className="text-blue-500"/></div>
+                         <div className="flex-1">
+                             <label className="flex items-center space-x-2 cursor-pointer">
+                                <input 
+                                    type="checkbox" 
+                                    checked={isOldLending} 
+                                    onChange={e => setIsOldLending(e.target.checked)}
+                                    className="w-5 h-5 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
+                                />
+                                <span className="text-sm font-semibold text-slate-800 dark:text-slate-200">Existing/Old Loan</span>
+                             </label>
+                             <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">Check this if the money was already lent previously. It will simply track the record without deducting money from your current accounts.</p>
+                         </div>
+                    </div>
+
                     <div className="md:col-span-2">
                         <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Borrower Name (Person/Org)</label>
                         <input value={newLending.borrower} onChange={e => setNewLending({...newLending, borrower: e.target.value})} className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" placeholder="e.g. John Doe"/>
@@ -206,9 +231,14 @@ const LendingsModule: React.FC<LendingsModuleProps> = ({
                         <input type="number" value={newLending.amount} onChange={e => setNewLending({...newLending, amount: e.target.value})} className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none" placeholder="0.00"/>
                     </div>
 
-                    <div>
+                    <div className={`${isOldLending ? 'opacity-50 pointer-events-none grayscale' : ''} transition-all`}>
                         <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-1">Deduct From Account</label>
-                        <select value={newLending.sourceAccountId} onChange={e => setNewLending({...newLending, sourceAccountId: e.target.value})} className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none">
+                        <select 
+                            value={newLending.sourceAccountId} 
+                            onChange={e => setNewLending({...newLending, sourceAccountId: e.target.value})} 
+                            disabled={isOldLending}
+                            className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                        >
                             {accounts.map(a => <option key={a.id} value={a.id} className="dark:bg-slate-800">{a.name} ({formatCurrency(a.balance)})</option>)}
                         </select>
                     </div>
@@ -235,7 +265,9 @@ const LendingsModule: React.FC<LendingsModuleProps> = ({
 
                     <div className="col-span-1 md:col-span-2 flex space-x-3 mt-4">
                         <button onClick={() => setIsAdding(false)} className="px-6 py-3 rounded-xl text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-700 transition-colors">Cancel</button>
-                        <button onClick={handleCreateLending} className="bg-blue-600 text-white px-8 py-3 rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all font-medium flex-1">Confirm Lending</button>
+                        <button onClick={handleCreateLending} className="bg-blue-600 text-white px-8 py-3 rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-500/30 transition-all font-medium flex-1">
+                            {isOldLending ? 'Record Existing Loan' : 'Confirm Lending'}
+                        </button>
                     </div>
                 </div>
             )}
