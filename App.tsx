@@ -290,34 +290,192 @@ export default function App() {
   };
 
   const exportToExcel = () => {
-    const createTable = (title: string, headers: string[], rows: (string | number)[][]) => `
-      <tr><td colspan="${headers.length}" style="font-size:16px; font-weight:bold; height:30px;">${title}</td></tr>
-      <tr>${headers.map(h => `<th style="background:#f0f0f0; font-weight:bold; border:1px solid #ddd;">${h}</th>`).join('')}</tr>
-      ${rows.map(r => `<tr>${r.map(c => `<td style="border:1px solid #ddd;">${c}</td>`).join('')}</tr>`).join('')}
-      <tr><td></td></tr>
+    const escapeXml = (str: string | number | undefined | null) => {
+        if (str === null || str === undefined) return '';
+        return String(str)
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;')
+            .replace(/'/g, '&apos;');
+    };
+
+    // 1. Define XML Styles
+    const styles = `
+    <Styles>
+        <Style ss:ID="Default" ss:Name="Normal">
+            <Alignment ss:Vertical="Bottom"/>
+            <Borders/>
+            <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="11" ss:Color="#000000"/>
+            <Interior/>
+            <NumberFormat/>
+            <Protection/>
+        </Style>
+        <Style ss:ID="Header">
+            <Alignment ss:Horizontal="Center" ss:Vertical="Center"/>
+            <Borders>
+                <Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/>
+                <Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/>
+                <Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/>
+                <Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/>
+            </Borders>
+            <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="11" ss:Color="#FFFFFF" ss:Bold="1"/>
+            <Interior ss:Color="#4472C4" ss:Pattern="Solid"/>
+        </Style>
+        <Style ss:ID="Title">
+            <Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="14" ss:Color="#4472C4" ss:Bold="1"/>
+        </Style>
+        <Style ss:ID="Currency">
+            <NumberFormat ss:Format="Standard"/>
+            <Alignment ss:Horizontal="Right"/>
+        </Style>
+        <Style ss:ID="Date">
+            <NumberFormat ss:Format="Short Date"/>
+             <Alignment ss:Horizontal="Center"/>
+        </Style>
+        <Style ss:ID="Bold">
+            <Font ss:FontName="Calibri" ss:Bold="1"/>
+        </Style>
+    </Styles>
     `;
 
-    const txnRows = transactions.map(t => [t.date, t.type, t.category, t.amount, t.notes || '-', accounts.find(a=>a.id===t.accountId)?.name || '']);
-    const txnTable = createTable('Transactions', ['Date', 'Type', 'Category', 'Amount', 'Notes', 'Account'], txnRows);
-    
-    const accRows = accounts.map(a => [a.name, a.type, a.balance]);
-    const accTable = createTable('Accounts', ['Name', 'Type', 'Balance'], accRows);
-    
-    const lendingRows = lendings.map(l => [l.borrower, l.totalAmount, l.payments.reduce((s,p)=>s+p.amount,0), l.status]);
-    const lendingTable = createTable('Lending', ['Borrower', 'Total Lent', 'Total Repaid', 'Status'], lendingRows);
+    const createRow = (cells: { value: string | number, style?: string, type?: 'String' | 'Number' }[]) => {
+        const cellXml = cells.map(cell => {
+            const type = cell.type || (typeof cell.value === 'number' ? 'Number' : 'String');
+            const style = cell.style ? ` ss:StyleID="${cell.style}"` : '';
+            return `<Cell${style}><Data ss:Type="${type}">${escapeXml(cell.value)}</Data></Cell>`;
+        }).join('');
+        return `<Row>${cellXml}</Row>`;
+    };
 
-    const excelHTML = `
-      <html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel">
-      <head><meta http-equiv="content-type" content="text/plain; charset=UTF-8"/></head>
-      <body><table>${accTable}${lendingTable}${txnTable}</table></body>
-      </html>
-    `;
+    const createWorksheet = (name: string, title: string, headers: string[], rows: { value: string | number, style?: string }[][]) => {
+        const headerRow = createRow(headers.map(h => ({ value: h, style: 'Header' })));
+        const dataRows = rows.map(r => createRow(r)).join('');
+        const titleRow = `<Row><Cell ss:StyleID="Title"><Data ss:Type="String">${escapeXml(title)}</Data></Cell></Row><Row></Row>`;
 
-    const blob = new Blob([excelHTML], { type: 'application/vnd.ms-excel' });
+        return `
+        <Worksheet ss:Name="${escapeXml(name)}">
+            <Table>
+                <Column ss:Width="100"/>
+                <Column ss:Width="120"/>
+                <Column ss:Width="120"/>
+                <Column ss:Width="120"/>
+                <Column ss:Width="120"/>
+                <Column ss:Width="200"/>
+                ${titleRow}
+                ${headerRow}
+                ${dataRows}
+            </Table>
+        </Worksheet>`;
+    };
+
+    // --- DATA PREPARATION ---
+
+    // 1. Overview Sheet
+    const totalAssets = totalWalletBalance + totalInvestmentValue;
+    const overviewRows = [
+        [{ value: 'Metric', style: 'Bold' }, { value: 'Value', style: 'Currency' }],
+        [{ value: 'Total Net Worth' }, { value: totalNetWorth, style: 'Currency' }],
+        [{ value: 'Total Assets (Liquid + Invested)' }, { value: totalAssets, style: 'Currency' }],
+        [{ value: 'Total Liabilities (Debts)' }, { value: totalDebtValue, style: 'Currency' }],
+        [{ value: 'Total Lending (Active)' }, { value: lendings.reduce((sum, l) => l.status === 'active' ? sum + (l.totalAmount - l.payments.reduce((p,i)=>p+i.amount,0)) : sum, 0), style: 'Currency' }],
+        [{ value: '' }, { value: '' }],
+        [{ value: 'ACCOUNT BREAKDOWN', style: 'Title' }, { value: '' }],
+        ...accounts.map(a => [{ value: `${a.name} (${a.type})` }, { value: a.balance, style: 'Currency' }])
+    ];
+    const sheetOverview = createWorksheet('Overview', 'Financial Snapshot', [], overviewRows);
+
+    // 2. Transaction Sheets (Grouped by Year)
+    const transactionsByYear = transactions.reduce((acc, t) => {
+        const year = new Date(t.date).getFullYear();
+        if (!acc[year]) acc[year] = [];
+        acc[year].push(t);
+        return acc;
+    }, {} as Record<number, Transaction[]>);
+
+    const transactionSheets = Object.keys(transactionsByYear).sort().reverse().map(yearStr => {
+        const year = Number(yearStr);
+        const txns = transactionsByYear[year].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        
+        const rows = txns.map(t => [
+            { value: t.date, style: 'Date' },
+            { value: new Date(t.date).toLocaleString('default', { month: 'short' }) },
+            { value: t.type.toUpperCase() },
+            { value: t.category },
+            { value: Number(t.amount), style: 'Currency' },
+            { value: accounts.find(a => a.id === t.accountId)?.name || 'Unknown' },
+            { value: t.notes || '' }
+        ]);
+        
+        return createWorksheet(`Transactions ${year}`, `Transactions for ${year}`, ['Date', 'Month', 'Type', 'Category', 'Amount', 'Account', 'Notes'], rows);
+    }).join('\n');
+
+    // 3. Investments Sheet
+    const invRows = investments.map(i => [
+        { value: i.date, style: 'Date' },
+        { value: i.name },
+        { value: i.type },
+        { value: i.investedAmount, style: 'Currency' },
+        { value: i.sipAmount || 0, style: 'Currency' }
+    ]);
+    const sheetInv = createWorksheet('Investments', 'Investment Portfolio', ['Date', 'Asset Name', 'Type', 'Invested Amount', 'SIP Amount'], invRows);
+
+    // 4. Debts Sheet
+    const debtRows = debts.map(d => [
+        { value: d.title },
+        { value: d.type },
+        { value: d.amount, style: 'Currency' },
+        { value: d.dueDate || 'N/A', style: 'Date' }
+    ]);
+    const sheetDebts = createWorksheet('Debts', 'Liabilities & EMI', ['Title', 'Type', 'Amount', 'Due Date'], debtRows);
+
+    // 5. Goals Sheet
+    const goalRows = goals.map(g => [
+        { value: g.title },
+        { value: g.target, style: 'Currency' },
+        { value: g.current, style: 'Currency' },
+        { value: g.target > 0 ? (g.current/g.target).toFixed(2) : 0, type: 'Number' }, // Percentage can be formatted by user in excel or we add style
+        { value: g.deadline || 'N/A', style: 'Date' }
+    ]);
+    const sheetGoals = createWorksheet('Goals', 'Financial Goals', ['Title', 'Target', 'Saved', 'Progress (0-1)', 'Deadline'], goalRows);
+
+    // 6. Lending Sheet
+    const lendRows = lendings.map(l => {
+        const repaid = l.payments.reduce((s,p)=>s+p.amount,0);
+        return [
+            { value: l.borrower },
+            { value: l.totalAmount, style: 'Currency' },
+            { value: repaid, style: 'Currency' },
+            { value: l.totalAmount - repaid, style: 'Currency' },
+            { value: l.status.toUpperCase() },
+            { value: l.date, style: 'Date' },
+            { value: l.returnDate || '', style: 'Date' }
+        ];
+    });
+    const sheetLending = createWorksheet('Lending', 'Lending Book', ['Borrower', 'Lent Amount', 'Repaid', 'Remaining', 'Status', 'Lent Date', 'Return Date'], lendRows);
+
+    // Combine all
+    const workbookXml = `<?xml version="1.0"?>
+    <?mso-application progid="Excel.Sheet"?>
+    <Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+     xmlns:o="urn:schemas-microsoft-com:office:office"
+     xmlns:x="urn:schemas-microsoft-com:office:excel"
+     xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+     xmlns:html="http://www.w3.org/TR/REC-html40">
+     ${styles}
+     ${sheetOverview}
+     ${transactionSheets}
+     ${sheetInv}
+     ${sheetDebts}
+     ${sheetGoals}
+     ${sheetLending}
+    </Workbook>`;
+
+    const blob = new Blob([workbookXml], { type: 'application/vnd.ms-excel' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `FinTrack_Export_${new Date().toISOString().split('T')[0]}.xls`;
+    link.download = `FinTrackPro_Export_${new Date().toISOString().split('T')[0]}.xls`;
     link.click();
   };
 
