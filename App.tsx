@@ -195,96 +195,123 @@ export default function App() {
     if (isNaN(amount) || amount <= 0) { alert("Please enter a valid amount"); return; }
     
     if (txn.type === 'transfer') {
-        if (!txn.toAccountId) { alert("Please select a destination account."); return; }
-        if (txn.accountId === txn.toAccountId) { alert("Source and destination accounts cannot be the same."); return; }
+        if (!txn.toAccountId) { alert("Please select a destination."); return; }
+        if (txn.accountId === txn.toAccountId) { alert("Source and destination cannot be the same."); return; }
     }
 
     const processSave = () => {
       let updatedAccounts = [...accounts];
+      let updatedDebts = [...debts];
       let updatedTransactions = [...transactions];
       
+      const updateBalance = (id: string, delta: number) => {
+          // Check Account (Asset)
+          const accIdx = updatedAccounts.findIndex(a => a.id === id);
+          if (accIdx >= 0) {
+              // Standard asset logic: +Delta adds money, -Delta removes money
+              updatedAccounts[accIdx] = { ...updatedAccounts[accIdx], balance: updatedAccounts[accIdx].balance + delta };
+              return;
+          }
+          // Check Debt (Liability)
+          const debtIdx = updatedDebts.findIndex(d => d.id === id);
+          if (debtIdx >= 0) {
+             // Liability Logic: 
+             // If we "add" value (delta > 0) via a transfer (repayment), debt DECREASES.
+             // If we "remove" value (delta < 0) via an expense (spending), debt INCREASES.
+             // So: New Debt = Old Debt - Delta.
+             // Example 1: Expense (-100). Debt - (-100) = Debt + 100. Correct (Owe more).
+             // Example 2: Repayment (+100). Debt - 100 = Debt - 100. Correct (Owe less).
+             updatedDebts[debtIdx] = { ...updatedDebts[debtIdx], amount: Math.max(0, updatedDebts[debtIdx].amount - delta) };
+          }
+      };
+
       // 1. REVERT OLD TRANSACTION IMPACT (If Editing)
       if (isEdit) {
         const oldTxn = transactions.find(t => t.id === txn.id);
         if (oldTxn) {
           const oldAmt = Number(oldTxn.amount);
-          updatedAccounts = updatedAccounts.map(acc => {
-            let bal = acc.balance;
-            
-            // Revert changes on the primary account (Source for Expense/Transfer, Target for Income)
-            if (acc.id === oldTxn.accountId) {
-              if (oldTxn.type === 'income') bal -= oldAmt;
-              else bal += oldAmt; // Expense or Transfer Source (reverting deduction)
-            }
-            
-            // Revert changes on destination account (for Transfer)
-            if (oldTxn.type === 'transfer' && acc.id === oldTxn.toAccountId) {
-                bal -= oldAmt; // Reverting addition to destination
-            }
-            
-            return { ...acc, balance: bal };
-          });
+          
+          if (oldTxn.type === 'income') {
+             // Revert Income: Remove from target (delta negative)
+             updateBalance(oldTxn.accountId, -oldAmt); 
+          } else if (oldTxn.type === 'expense') {
+             // Revert Expense: Add back to source (delta positive)
+             updateBalance(oldTxn.accountId, oldAmt);
+          } else if (oldTxn.type === 'transfer') {
+             // Revert Transfer: Add back to source, Remove from dest
+             updateBalance(oldTxn.accountId, oldAmt);
+             if(oldTxn.toAccountId) updateBalance(oldTxn.toAccountId, -oldAmt);
+          }
           updatedTransactions = updatedTransactions.filter(t => t.id !== txn.id);
         }
       }
 
       // 2. APPLY NEW TRANSACTION IMPACT
-      updatedAccounts = updatedAccounts.map(acc => {
-        let bal = acc.balance;
-        
-        // Apply to primary account
-        if (acc.id === txn.accountId) {
-          if (txn.type === 'income') bal += amount;
-          else bal -= amount; // Expense or Transfer Source
-        }
-        
-        // Apply to destination account (for Transfer)
-        if (txn.type === 'transfer' && acc.id === txn.toAccountId) {
-            bal += amount;
-        }
-        return { ...acc, balance: bal };
-      });
+      if (txn.type === 'income') {
+          updateBalance(txn.accountId, amount);
+      } else if (txn.type === 'expense') {
+          updateBalance(txn.accountId, -amount);
+      } else if (txn.type === 'transfer') {
+          updateBalance(txn.accountId, -amount);
+          if(txn.toAccountId) updateBalance(txn.toAccountId, amount);
+      }
 
       const finalTxn: Transaction = { 
           ...txn, 
           id: txn.id || generateId(), 
           amount, 
           date: txn.date || new Date().toISOString().split('T')[0],
-          category: txn.type === 'transfer' ? 'Transfer' : txn.category // Force category name for transfers
+          category: txn.type === 'transfer' ? 'Transfer' : txn.category
       };
       
       setAccounts(updatedAccounts);
+      setDebts(updatedDebts);
       setTransactions([finalTxn, ...updatedTransactions]);
       setShowAddTxn(false);
       setEditingTxnId(null);
     };
 
-    if (isEdit) handleConfirmAction("Update Transaction?", "Are you sure? Account balances will be recalculated.", processSave, 'update');
+    if (isEdit) handleConfirmAction("Update Transaction?", "Are you sure? Account balances and debts will be recalculated.", processSave, 'update');
     else processSave();
   };
 
   const deleteTransaction = (id: string) => {
-    handleConfirmAction("Delete Transaction?", "This cannot be undone. Balances will be reverted.", () => {
+    handleConfirmAction("Delete Transaction?", "This cannot be undone. Balances and debts will be reverted.", () => {
         const txn = transactions.find(t => t.id === id);
         if (!txn) return;
         
         const amount = Number(txn.amount);
-        const updatedAccounts = accounts.map(acc => {
-          let bal = acc.balance;
-          
-          if (acc.id === txn.accountId) {
-            if (txn.type === 'income') bal -= amount; // Revert income addition
-            else bal += amount; // Revert expense/transfer deduction
-          }
-          
-          if (txn.type === 'transfer' && acc.id === txn.toAccountId) {
-             bal -= amount; // Revert transfer addition
-          }
-          
-          return { ...acc, balance: bal };
-        });
+        
+        const updateBalance = (id: string, delta: number, accountsCopy: Account[], debtsCopy: Debt[]) => {
+            const accIdx = accountsCopy.findIndex(a => a.id === id);
+            if (accIdx >= 0) {
+                accountsCopy[accIdx].balance += delta;
+            } else {
+                const debtIdx = debtsCopy.findIndex(d => d.id === id);
+                if (debtIdx >= 0) {
+                     // Reverse logic of Apply: Debt = Debt - Delta
+                     debtsCopy[debtIdx].amount = Math.max(0, debtsCopy[debtIdx].amount - delta);
+                }
+            }
+        };
+
+        const updatedAccounts = [...accounts];
+        const updatedDebts = [...debts];
+
+        if (txn.type === 'income') {
+            // Revert Income: Remove (delta negative)
+            updateBalance(txn.accountId, -amount, updatedAccounts, updatedDebts);
+        } else if (txn.type === 'expense') {
+            // Revert Expense: Add back (delta positive)
+            updateBalance(txn.accountId, amount, updatedAccounts, updatedDebts);
+        } else if (txn.type === 'transfer') {
+            // Revert Transfer: Add to source, Remove from dest
+            updateBalance(txn.accountId, amount, updatedAccounts, updatedDebts);
+            if(txn.toAccountId) updateBalance(txn.toAccountId, -amount, updatedAccounts, updatedDebts);
+        }
         
         setAccounts(updatedAccounts);
+        setDebts(updatedDebts);
         setTransactions(transactions.filter(t => t.id !== id));
     });
   };
@@ -403,7 +430,8 @@ export default function App() {
             { value: t.type.toUpperCase() },
             { value: t.category },
             { value: Number(t.amount), style: 'Currency' },
-            { value: accounts.find(a => a.id === t.accountId)?.name || 'Unknown' },
+            // Resolve Account OR Debt Name
+            { value: accounts.find(a => a.id === t.accountId)?.name || debts.find(d => d.id === t.accountId)?.title || 'Unknown' },
             { value: t.notes || '' }
         ]);
         
@@ -602,7 +630,7 @@ export default function App() {
             </div>
             
             <div className={view === 'debts' ? 'block' : 'hidden'}>
-                <DebtsModule debts={debts} setDebts={setDebts} debtTypes={debtTypes} handleConfirmAction={handleConfirmAction} />
+                <DebtsModule debts={debts} setDebts={setDebts} debtTypes={debtTypes} handleConfirmAction={handleConfirmAction} handleSaveTransaction={handleSaveTransaction} accounts={accounts} />
             </div>
 
             <div className={view === 'lending' ? 'block' : 'hidden'}>
@@ -610,7 +638,7 @@ export default function App() {
             </div>
 
             <div className={view === 'transactions' ? 'block' : 'hidden'}>
-                <TransactionModule transactions={transactions} setTransactions={setTransactions} accounts={accounts} incomeCategories={incomeCategories} expenseCategories={expenseCategories} handleSaveTransaction={handleSaveTransaction} deleteTransaction={deleteTransaction} handleEditClick={setEditingTxnId} editingTxnId={editingTxnId} showAddTxn={showAddTxn} setShowAddTxn={setShowAddTxn} setEditingTxnId={setEditingTxnId} />
+                <TransactionModule transactions={transactions} setTransactions={setTransactions} accounts={accounts} debts={debts} incomeCategories={incomeCategories} expenseCategories={expenseCategories} handleSaveTransaction={handleSaveTransaction} deleteTransaction={deleteTransaction} handleEditClick={setEditingTxnId} editingTxnId={editingTxnId} showAddTxn={showAddTxn} setShowAddTxn={setShowAddTxn} setEditingTxnId={setEditingTxnId} />
             </div>
 
             <div className={view === 'investments' ? 'block' : 'hidden'}>
