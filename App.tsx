@@ -371,15 +371,13 @@ export default function App() {
   };
 
   const exportToExcel = () => {
-     // ... (Existing export logic remains the same, just keeping the function signature)
-     // For brevity, I'm not re-printing the whole export logic unless needed, but in real file I would.
-     // To avoid cutting off, I will call the original function logic or just keep it as is.
-     // Assuming existing code is fine, I'll copy the existing implementation for completeness.
-     const escapeXml = (str: string | number | undefined | null) => {
+    const escapeXml = (str: string | number | undefined | null) => {
         if (str === null || str === undefined) return '';
         return String(str).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;').replace(/'/g, '&apos;');
     };
+
     const styles = `<Styles><Style ss:ID="Default" ss:Name="Normal"><Alignment ss:Vertical="Bottom"/><Borders/><Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="11" ss:Color="#000000"/><Interior/><NumberFormat/><Protection/></Style><Style ss:ID="Header"><Alignment ss:Horizontal="Center" ss:Vertical="Center"/><Borders><Border ss:Position="Bottom" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Left" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Right" ss:LineStyle="Continuous" ss:Weight="1"/><Border ss:Position="Top" ss:LineStyle="Continuous" ss:Weight="1"/></Borders><Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="11" ss:Color="#FFFFFF" ss:Bold="1"/><Interior ss:Color="#4472C4" ss:Pattern="Solid"/></Style><Style ss:ID="Title"><Font ss:FontName="Calibri" x:Family="Swiss" ss:Size="14" ss:Color="#4472C4" ss:Bold="1"/></Style><Style ss:ID="Currency"><NumberFormat ss:Format="Standard"/><Alignment ss:Horizontal="Right"/></Style><Style ss:ID="Date"><NumberFormat ss:Format="Short Date"/><Alignment ss:Horizontal="Center"/></Style><Style ss:ID="Bold"><Font ss:FontName="Calibri" ss:Bold="1"/></Style></Styles>`;
+    
     const createRow = (cells: { value: string | number, style?: string, type?: 'String' | 'Number' }[]) => {
         const cellXml = cells.map(cell => {
             const type = cell.type || (typeof cell.value === 'number' ? 'Number' : 'String');
@@ -388,37 +386,91 @@ export default function App() {
         }).join('');
         return `<Row>${cellXml}</Row>`;
     };
+    
     const createWorksheet = (name: string, title: string, headers: string[], rows: { value: string | number, style?: string }[][]) => {
         const headerRow = createRow(headers.map(h => ({ value: h, style: 'Header' })));
         const dataRows = rows.map(r => createRow(r)).join('');
         const titleRow = `<Row><Cell ss:StyleID="Title"><Data ss:Type="String">${escapeXml(title)}</Data></Cell></Row><Row></Row>`;
-        return `<Worksheet ss:Name="${escapeXml(name)}"><Table><Column ss:Width="100"/><Column ss:Width="120"/><Column ss:Width="120"/><Column ss:Width="120"/><Column ss:Width="120"/><Column ss:Width="200"/>${titleRow}${headerRow}${dataRows}</Table></Worksheet>`;
+        return `<Worksheet ss:Name="${escapeXml(name)}"><Table><Column ss:Width="120"/><Column ss:Width="120"/><Column ss:Width="120"/><Column ss:Width="120"/><Column ss:Width="120"/><Column ss:Width="200"/>${titleRow}${headerRow}${dataRows}</Table></Worksheet>`;
     };
     
+    // Sheet 1: Overview
     const totalAssets = totalWalletBalance + totalInvestmentValue;
-    const overviewRows = [[{ value: 'Metric', style: 'Bold' }, { value: 'Value', style: 'Currency' }],[{ value: 'Total Net Worth' }, { value: totalNetWorth, style: 'Currency' }],[{ value: 'Total Assets' }, { value: totalAssets, style: 'Currency' }],[{ value: 'Total Liabilities' }, { value: totalDebtValue, style: 'Currency' }],[{ value: 'Account Breakdown', style: 'Title' }, { value: '' }],...accounts.map(a => [{ value: `${a.name} (${a.type})` }, { value: a.balance, style: 'Currency' }])];
+    const overviewRows = [
+        [{ value: 'Metric', style: 'Bold' }, { value: 'Value', style: 'Currency' }],
+        [{ value: 'Total Net Worth' }, { value: totalNetWorth, style: 'Currency' }],
+        [{ value: 'Total Liquid Assets' }, { value: totalWalletBalance, style: 'Currency' }],
+        [{ value: 'Total Investments' }, { value: totalInvestmentValue, style: 'Currency' }],
+        [{ value: 'Total Liabilities' }, { value: totalDebtValue, style: 'Currency' }],
+        [{ value: 'Monthly Income' }, { value: monthlyMetrics.income, style: 'Currency' }],
+        [{ value: 'Monthly Expense' }, { value: monthlyMetrics.expense, style: 'Currency' }]
+    ];
     const sheetOverview = createWorksheet('Overview', 'Financial Snapshot', [], overviewRows);
-    
-    // Transactions
-    const transactionsByYear = transactions.reduce((acc, t) => {
-        const year = new Date(t.date).getFullYear();
-        if (!acc[year]) acc[year] = [];
-        acc[year].push(t);
-        return acc;
-    }, {} as Record<number, Transaction[]>);
-    const transactionSheets = Object.keys(transactionsByYear).sort().reverse().map(yearStr => {
-        const year = Number(yearStr);
-        const txns = transactionsByYear[year].sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        const rows = txns.map(t => [{ value: t.date, style: 'Date' },{ value: t.type.toUpperCase() },{ value: t.category },{ value: Number(t.amount), style: 'Currency' },{ value: accounts.find(a => a.id === t.accountId)?.name || debts.find(d => d.id === t.accountId)?.title || 'Unknown' },{ value: t.notes || '' }]);
-        return createWorksheet(`Transactions ${year}`, `Transactions for ${year}`, ['Date', 'Type', 'Category', 'Amount', 'Account', 'Notes'], rows);
-    }).join('\n');
 
-    const workbookXml = `<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet" xmlns:html="http://www.w3.org/TR/REC-html40">${styles}${sheetOverview}${transactionSheets}</Workbook>`;
+    // Sheet 2: Accounts
+    const accountRows = accounts.map(a => [
+        { value: a.name }, { value: a.type }, { value: a.balance, style: 'Currency' }
+    ]);
+    const sheetAccounts = createWorksheet('Accounts', 'My Accounts', ['Name', 'Type', 'Current Balance'], accountRows);
+
+    // Sheet 3: Debts
+    const debtRows = debts.map(d => [
+        { value: d.title }, { value: d.type }, { value: d.amount, style: 'Currency' }, { value: d.dueDate || 'N/A' }
+    ]);
+    const sheetDebts = createWorksheet('Debts', 'Liabilities', ['Title', 'Type', 'Amount Owed', 'Due Date'], debtRows);
+
+    // Sheet 4: Investments
+    const investmentRows = investments.map(i => [
+        { value: i.name }, { value: i.type }, { value: i.investedAmount, style: 'Currency' }, { value: i.sipAmount || 0, style: 'Currency' }, { value: i.date }
+    ]);
+    const sheetInvestments = createWorksheet('Investments', 'Investment Portfolio', ['Asset Name', 'Type', 'Total Invested', 'Monthly SIP', 'Start Date'], investmentRows);
+
+    // Sheet 5: Goals
+    const goalRows = goals.map(g => [
+        { value: g.title }, { value: g.target, style: 'Currency' }, { value: g.current, style: 'Currency' }, { value: g.deadline || 'N/A' }, { value: `${((g.current / g.target) * 100).toFixed(1)}%` }
+    ]);
+    const sheetGoals = createWorksheet('Goals', 'Financial Goals', ['Goal Title', 'Target Amount', 'Saved', 'Deadline', 'Progress'], goalRows);
+
+    // Sheet 6: Lending
+    const lendingRows = lendings.map(l => {
+        const repaid = l.payments.reduce((sum, p) => sum + p.amount, 0);
+        return [
+            { value: l.borrower }, { value: l.totalAmount, style: 'Currency' }, { value: repaid, style: 'Currency' }, { value: l.status.toUpperCase() }, { value: l.date }, { value: l.returnDate || 'N/A' }
+        ];
+    });
+    const sheetLending = createWorksheet('Lending', 'Lending Records', ['Borrower', 'Lent Amount', 'Repaid Amount', 'Status', 'Lent Date', 'Due Date'], lendingRows);
+
+    // Sheet 7: Budgets
+    const budgetRows = budgets.map(b => [
+        { value: b.category }, { value: b.limit, style: 'Currency' }, { value: `${b.alertThreshold}%` }
+    ]);
+    const sheetBudgets = createWorksheet('Budgets', 'Monthly Category Budgets', ['Category', 'Limit', 'Alert Threshold'], budgetRows);
+    
+    // Sheet 8: Subscriptions
+    const subRows = subscriptions.map(s => [
+        { value: s.name }, { value: s.amount, style: 'Currency' }, { value: s.frequency }, { value: s.type }, { value: s.category }, { value: s.nextDueDate }
+    ]);
+    const sheetSubs = createWorksheet('Subscriptions', 'Recurring Payments', ['Name', 'Amount', 'Frequency', 'Type', 'Category', 'Next Due'], subRows);
+
+    // Sheet 9: Transactions (Grouped by Year logic from before, but simplified to single sheet for robustness or keep multi-sheet)
+    // Let's make one master sheet for transactions to be cleaner
+    const txnRows = transactions.sort((a,b) => new Date(b.date).getTime() - new Date(a.date).getTime()).map(t => [
+        { value: t.date, style: 'Date' },
+        { value: t.type.toUpperCase() },
+        { value: t.category },
+        { value: Number(t.amount), style: 'Currency' },
+        { value: accounts.find(a => a.id === t.accountId)?.name || debts.find(d => d.id === t.accountId)?.title || 'Unknown' },
+        { value: t.notes || '' }
+    ]);
+    const sheetTransactions = createWorksheet('Transactions', 'Transaction History', ['Date', 'Type', 'Category', 'Amount', 'Account', 'Notes'], txnRows);
+
+    const workbookXml = `<?xml version="1.0"?><?mso-application progid="Excel.Sheet"?><Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet" xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet" xmlns:html="http://www.w3.org/TR/REC-html40">${styles}${sheetOverview}${sheetAccounts}${sheetTransactions}${sheetDebts}${sheetInvestments}${sheetGoals}${sheetLending}${sheetBudgets}${sheetSubs}</Workbook>`;
+    
     const blob = new Blob([workbookXml], { type: 'application/vnd.ms-excel' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `FinTrackPro_Export.xls`;
+    link.download = `FinTrackPro_Full_Export.xls`;
     link.click();
   };
 

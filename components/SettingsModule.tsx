@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { 
-  List, XCircle, Sun, Moon, Save, FileJson, FileSpreadsheet, Upload, AlertTriangle, Trash2, Download, Mic, Languages, Lock, ShieldCheck, Unlock, Key, FileText, Globe
+  List, XCircle, Sun, Moon, Save, FileJson, FileSpreadsheet, Upload, AlertTriangle, Trash2, Download, Mic, Languages, Lock, ShieldCheck, Unlock, Key, Globe
 } from 'lucide-react';
 import { SECURITY_QUESTIONS } from '../constants';
 import { SecurityQA, Transaction } from '../types';
-import { generateId, CURRENCY_OPTIONS } from '../utils';
+import { CURRENCY_OPTIONS } from '../utils';
 
 interface SettingsModuleProps {
     theme: string;
@@ -165,22 +165,6 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({
         newList[index] = { ...newList[index], [field]: value };
         setQaList(newList);
     };
-
-    const handleCSVImport = (event: React.ChangeEvent<HTMLInputElement>) => {
-        const file = event.target.files?.[0];
-        if (!file || !handleSaveTransaction) return;
-
-        const reader = new FileReader();
-        reader.onload = (e) => {
-            const text = e.target?.result as string;
-            if (!text) return;
-            
-            const lines = text.split('\n');
-            // Simple CSV parsing placeholder
-            alert("CSV Import is a complex feature that requires column mapping. Please use JSON Backup for full data portability.");
-        };
-        reader.readAsText(file);
-    }
 
     return (
     <div className="space-y-6 animate-in fade-in duration-500 relative">
@@ -500,10 +484,6 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({
                 <label className="flex-1 flex items-center justify-center px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 cursor-pointer font-medium transition-colors">
                 <Upload size={18} className="mr-2" /> Restore from JSON Backup
                 <input type="file" onChange={importData} className="hidden" accept=".json" />
-                </label>
-                 <label className="flex-1 flex items-center justify-center px-4 py-3 bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-600 cursor-pointer font-medium transition-colors">
-                <FileText size={18} className="mr-2" /> Import CSV (Basic)
-                <input type="file" onChange={handleCSVImport} className="hidden" accept=".csv" />
                 </label>
             </div>
           </div>

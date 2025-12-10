@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Brain, MessageSquare, Mic, Sparkles } from 'lucide-react';
+import { Brain, MessageSquare, Mic, Sparkles, Trash2 } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 import { 
     Transaction, Account, Investment, Debt, Goal, AppMetadata, Lending 
@@ -141,6 +141,13 @@ const AIModule: React.FC<AIModuleProps> = ({
       setLoading(false);
     };
 
+    const handleClearChat = () => {
+        if (window.confirm("Are you sure you want to clear the conversation history?")) {
+            setMessages([]);
+            setLoading(false);
+        }
+    };
+
     const faqs = [
         "What is my current Net Worth?",
         "What do I spend the most on?",
@@ -185,8 +192,19 @@ const AIModule: React.FC<AIModuleProps> = ({
                 </button>
              </div>
           </div>
-          <div className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hidden sm:block">
-              Registered: {formatDate(appMetadata.createdAt)}
+          <div className="flex items-center space-x-3">
+             {mode === 'text' && messages.length > 0 && (
+                <button 
+                    onClick={handleClearChat}
+                    className="flex items-center px-3 py-1.5 text-xs font-bold text-slate-500 hover:text-red-600 dark:text-slate-400 dark:hover:text-red-400 bg-white dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-lg transition-colors shadow-sm cursor-pointer z-10"
+                    title="Clear Conversation"
+                >
+                    <Trash2 size={14} className="mr-1.5"/> Clear
+                </button>
+             )}
+             <div className="text-[10px] text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded border border-slate-200 dark:border-slate-700 hidden sm:block">
+                Registered: {formatDate(appMetadata.createdAt)}
+             </div>
           </div>
         </div>
         

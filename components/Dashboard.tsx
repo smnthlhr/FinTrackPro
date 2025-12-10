@@ -81,67 +81,72 @@ const Dashboard: React.FC<DashboardProps> = ({
         );
     };
 
-    // Financial Health Score Calculation
+    // Financial Health Score Calculation (Strict Mode)
     const calculateHealthScore = () => {
         let score = 0;
-        
         const totalAssets = totalWalletBalance + totalInvestmentValue;
 
-        // 0. Base Case: If no data exists, score should be 0, not 30 (from debt logic).
+        // Base case: No data
         if (totalAssets === 0 && monthlyMetrics.income === 0 && totalDebtValue === 0) {
             return 0;
         }
 
-        // 1. Savings Rate (Max 40 points)
-        // Target: 20% savings rate of income
-        // Logic: (Savings / Income) * 200. E.g. 0.20 * 200 = 40.
-        if (monthlyMetrics.income > 0 && monthlyMetrics.savings > 0) {
+        // 1. Savings Ratio (Max 30 points)
+        // Target: 20% of income should be saved/invested.
+        if (monthlyMetrics.income > 0) {
             const savingsRate = monthlyMetrics.savings / monthlyMetrics.income;
-            score += Math.min(savingsRate * 200, 40);
+            // Cap at 30 points. If rate is negative, this adds nothing (handled by math.min/max later)
+            score += Math.max(0, Math.min((savingsRate / 0.20) * 30, 30));
         }
 
-        // 2. Liquidity (Max 30 points)
-        // Target: 3 months of expenses in Liquid Assets (Wallet Balance)
-        // Logic: (Balance / Expense) * 10. E.g. 3.0 * 10 = 30.
+        // 2. Liquidity / Emergency Fund (Max 30 points)
+        // Target: Cash balance should cover 3-6 months of expenses.
+        // We use 3 months as the baseline for full points here to be lenient on liquidity.
         if (monthlyMetrics.expense > 0) {
-            const liquidityRatio = totalWalletBalance / monthlyMetrics.expense;
-            score += Math.min(liquidityRatio * 10, 30);
+            const monthsCovered = totalWalletBalance / monthlyMetrics.expense;
+            score += Math.min((monthsCovered / 3) * 30, 30);
         } else if (totalWalletBalance > 0) {
-            // If no expenses but has cash, full liquidity points
+            // No expenses but has cash
             score += 30;
         }
 
-        // 3. Solvency / Debt Ratio (Max 30 points)
-        // Target: 0 Debt is best.
-        // Logic: Debt-to-Asset Ratio.
-        // If Debt Free: 30 points.
-        // If Debt >= Assets: 0 points.
-        if (totalDebtValue === 0) {
-            score += 30;
+        // 3. Debt Burden (Max 40 points)
+        // This is where we penalize heavily.
+        // Ratio: Debt / Assets. 
+        if (totalAssets === 0) {
+            if (totalDebtValue === 0) score += 40; // No assets, no debt = neutral/okay
+            else score += 0; // Debt but no assets = 0 points for this section
         } else {
-            if (totalAssets > 0) {
-                const debtRatio = totalDebtValue / totalAssets;
-                // Score reduces as debt ratio increases
-                // Ratio 0.5 (Debt is half of assets) -> 30 * (1 - 0.5) = 15 pts
-                // Ratio 1.0 (Debt equals assets) -> 0 pts
-                score += Math.max(0, 30 * (1 - debtRatio));
-            } else {
-                // Debt exists, no assets => 0 points
-                score += 0;
-            }
+            const debtRatio = totalDebtValue / totalAssets;
+            // 0% Debt = 40 pts
+            // 50% Debt = 20 pts
+            // 100% Debt (Insolvent) = 0 pts
+            const debtScore = 40 * (1 - debtRatio);
+            score += Math.max(0, debtScore);
         }
 
-        return Math.min(Math.round(score), 100);
+        // 4. PENALTIES (The "Reality Check")
+        // If Debt > Assets (Technically Insolvent), cap the score or subtract heavily.
+        if (totalDebtValue > totalAssets) {
+            score -= 30; // Heavy penalty
+        }
+
+        // If Monthly Expense > Monthly Income (Cashflow Negative)
+        if (monthlyMetrics.expense > monthlyMetrics.income) {
+            score -= 15;
+        }
+
+        return Math.max(0, Math.min(Math.round(score), 100));
     };
 
     const healthScore = calculateHealthScore();
     const getScoreColor = (s: number) => {
         if (s === 0) return 'text-slate-400';
-        return s >= 80 ? 'text-emerald-500' : s >= 50 ? 'text-amber-500' : 'text-red-500';
+        return s >= 80 ? 'text-emerald-500' : s >= 60 ? 'text-amber-500' : 'text-red-500';
     };
     const getScoreLabel = (s: number) => {
         if (s === 0) return 'No Data';
-        return s >= 80 ? 'Excellent' : s >= 50 ? 'Good' : 'Needs Work';
+        return s >= 80 ? 'Excellent' : s >= 60 ? 'Good' : s >= 40 ? 'Fair' : 'Critical';
     };
 
     return (
@@ -204,7 +209,7 @@ const Dashboard: React.FC<DashboardProps> = ({
                      </div>
                 </div>
                 <p className={`text-lg font-bold ${getScoreColor(healthScore)}`}>{getScoreLabel(healthScore)}</p>
-                <p className="text-xs text-slate-400 text-center mt-2 px-4">Based on savings, liquidity, and debt ratio.</p>
+                <p className="text-xs text-slate-400 text-center mt-2 px-4">Based on savings ratio, liquidity, and debt burden penalties.</p>
             </div>
         </div>
 
