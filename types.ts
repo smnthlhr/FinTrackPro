@@ -16,12 +16,30 @@ export interface Transaction {
   date: string; // ISO Date string YYYY-MM-DD
 }
 
+export interface Subscription {
+  id: string;
+  name: string;
+  amount: number;
+  type: 'income' | 'expense';
+  category: string;
+  accountId: string;
+  frequency: 'monthly';
+  nextDueDate: string;
+  isActive: boolean;
+}
+
 export interface Goal {
   id: string;
   title: string;
   target: number;
   current: number;
   deadline: string;
+}
+
+export interface Budget {
+  category: string;
+  limit: number;
+  alertThreshold: number; // e.g., 80%
 }
 
 export interface InvestmentHistoryItem {
