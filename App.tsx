@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   Wallet, TrendingUp, Target, Settings, Brain, Menu, X, ArrowRightLeft, 
-  CreditCard, Activity, Briefcase, CheckCircle, Lock, HandCoins, PieChart
+  CreditCard, Activity, Briefcase, CheckCircle, Lock, HandCoins, PieChart, Repeat
 } from 'lucide-react';
 
 import { 
@@ -27,6 +27,7 @@ import FloatingAssistant from './components/FloatingAssistant';
 import LockScreen from './components/LockScreen';
 import LendingsModule from './components/LendingsModule';
 import BudgetModule from './components/BudgetModule';
+import SubscriptionsModule from './components/SubscriptionsModule';
 
 export default function App() {
   const [view, setView] = useState('dashboard'); 
@@ -125,56 +126,91 @@ export default function App() {
     }
   }, []);
 
-  // Check for recurring transactions (subscriptions) on load/update
+  // Updated Auto-Deduction Logic for Subscriptions / EMI
   useEffect(() => {
     if (subscriptions.length > 0) {
       const today = new Date().toISOString().split('T')[0];
-      let newTransactions: Transaction[] = [];
-      let updatedSubscriptions = [...subscriptions];
-      let updatedAccounts = [...accounts];
       let hasUpdates = false;
+      let newTxns: Transaction[] = [];
+      const accountChanges: Record<string, number> = {};
+      const debtChanges: Record<string, number> = {};
 
-      updatedSubscriptions = updatedSubscriptions.map(sub => {
-        if (sub.isActive && sub.nextDueDate <= today) {
-          // Trigger Transaction
-          hasUpdates = true;
-          const txnId = generateId();
-          newTransactions.push({
-            id: txnId,
-            amount: sub.amount,
-            type: sub.type,
-            category: sub.category,
-            accountId: sub.accountId,
-            date: sub.nextDueDate,
-            notes: `Auto-generated subscription: ${sub.name}`
-          });
+      const updatedSubscriptions = subscriptions.map(sub => {
+        if (!sub.isActive) return sub;
+        
+        // Create a copy to modify without mutating state directly inside map
+        let tempSub = { ...sub };
+        let modified = false;
 
-          // Update Account Balance
-          const accIdx = updatedAccounts.findIndex(a => a.id === sub.accountId);
-          if (accIdx >= 0) {
-            updatedAccounts[accIdx] = {
-              ...updatedAccounts[accIdx],
-              balance: updatedAccounts[accIdx].balance + (sub.type === 'income' ? sub.amount : -sub.amount)
-            };
-          }
+        // Loop to catch up on missed payments (e.g. if user didn't open app for 2 months)
+        while (tempSub.nextDueDate <= today) {
+           hasUpdates = true;
+           modified = true;
+           
+           // 1. Create Transaction
+           const newTxn: Transaction = {
+             id: generateId(),
+             amount: tempSub.amount,
+             type: tempSub.type,
+             category: tempSub.category,
+             accountId: tempSub.accountId,
+             date: tempSub.nextDueDate,
+             notes: `Auto-payment: ${tempSub.name}`
+           };
+           newTxns.push(newTxn);
 
-          // Advance Date by 1 Month
-          const nextDate = new Date(sub.nextDueDate);
-          nextDate.setMonth(nextDate.getMonth() + 1);
-          return { ...sub, nextDueDate: nextDate.toISOString().split('T')[0] };
+           // 2. Track Balance Impact (Aggregate changes per account)
+           // Determine if account is an Asset (Account) or Liability (Debt)
+           const isAccount = accounts.some(a => a.id === tempSub.accountId);
+           const isDebt = !isAccount && debts.some(d => d.id === tempSub.accountId);
+           
+           if (isAccount) {
+               // Asset/Account: Income adds (+), Expense subtracts (-)
+               // For Credit Accounts inside 'accounts', 'balance' represents Available Limit.
+               // Expense on Credit Card -> Lowers Available Limit.
+               // Income on Credit Card -> Increases Available Limit.
+               // Logic is SAME for both Asset and Credit Account types regarding 'balance' update.
+               const impact = tempSub.type === 'income' ? tempSub.amount : -tempSub.amount;
+               accountChanges[tempSub.accountId] = (accountChanges[tempSub.accountId] || 0) + impact;
+           } else if (isDebt) {
+               // Liability (Manual Debt): Income subtracts from debt (-), Expense adds to debt (+)
+               const impact = tempSub.type === 'income' ? -tempSub.amount : tempSub.amount;
+               debtChanges[tempSub.accountId] = (debtChanges[tempSub.accountId] || 0) + impact;
+           }
+
+           // 3. Advance Date (Monthly)
+           const currentDueDate = new Date(tempSub.nextDueDate);
+           currentDueDate.setMonth(currentDueDate.getMonth() + 1);
+           tempSub.nextDueDate = currentDueDate.toISOString().split('T')[0];
         }
-        return sub;
+
+        return modified ? tempSub : sub;
       });
 
       if (hasUpdates) {
-        setTransactions(prev => [...prev, ...newTransactions]);
-        setAccounts(updatedAccounts);
+        // Batch Updates to prevent race conditions
         setSubscriptions(updatedSubscriptions);
-        // We trigger a save effect via the main dependency array below
+        setTransactions(prev => [...prev, ...newTxns]);
+        
+        setAccounts(prevAccounts => prevAccounts.map(acc => {
+            const change = accountChanges[acc.id];
+            if (change) {
+                return { ...acc, balance: acc.balance + change };
+            }
+            return acc;
+        }));
+
+        setDebts(prevDebts => prevDebts.map(debt => {
+            const change = debtChanges[debt.id];
+            if (change) {
+                return { ...debt, amount: Math.max(0, debt.amount + change) };
+            }
+            return debt;
+        }));
       }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [subscriptions]); // Only depend on subscriptions to avoid infinite loops with transactions/accounts
+  }, [subscriptions]); // Dependency on subscriptions ensures checking whenever list changes, logic guards against infinite loops by updating dates
 
   // Separate effect for Theme
   useEffect(() => {
@@ -201,9 +237,26 @@ export default function App() {
     setLastSaved(new Date());
   }, [accounts, transactions, goals, investments, debts, lendings, budgets, subscriptions, theme, incomeCategories, expenseCategories, debtTypes, investmentTypes, accountTypes, view, aiLanguage, aiVoice, currency, currencyRate, appPin, isAppLocked, securityQA]);
 
-  const totalWalletBalance = accounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
+  // CALCULATION LOGIC UPDATES
+  // 1. Net Worth = Liquid Assets + Investments - Liabilities
+  // Liquid Assets: Sum of non-credit account balances
+  const totalWalletBalance = accounts.reduce((sum, acc) => {
+      if (acc.isCredit) return sum; // Credit Card Available Limit is NOT an asset
+      return sum + (acc.balance || 0);
+  }, 0);
+
   const totalInvestmentValue = investments.reduce((sum, inv) => sum + (inv.investedAmount || 0), 0);
-  const totalDebtValue = debts.reduce((sum, d) => sum + (d.amount || 0), 0);
+  
+  // Liabilities: Manual Debts + Credit Card Utilization
+  const totalDebtValue = debts.reduce((sum, d) => sum + (d.amount || 0), 0) + 
+      accounts.reduce((sum, acc) => {
+          if (acc.isCredit && (acc.creditLimit || 0) > 0) {
+              // Debt = Total Limit - Available Limit
+              return sum + Math.max(0, (acc.creditLimit || 0) - acc.balance);
+          }
+          return sum;
+      }, 0);
+
   const totalNetWorth = (totalWalletBalance + totalInvestmentValue) - totalDebtValue;
   
   const monthlyMetrics = useMemo(() => {
@@ -273,15 +326,27 @@ export default function App() {
       let updatedTransactions = [...transactions];
       
       const updateBalance = (id: string, delta: number) => {
-          // Check Account (Asset)
+          // Check Account (Asset OR Credit Card)
           const accIdx = updatedAccounts.findIndex(a => a.id === id);
           if (accIdx >= 0) {
+              // For normal assets: +delta means more money, -delta means less money.
+              // For credit cards: 'balance' is Available Limit.
+              // Spending (-delta) reduces Available Limit. Repayment (+delta) increases it.
+              // The logic is identical.
               updatedAccounts[accIdx] = { ...updatedAccounts[accIdx], balance: updatedAccounts[accIdx].balance + delta };
               return;
           }
-          // Check Debt (Liability)
+          // Check Debt (Manual Liability)
           const debtIdx = updatedDebts.findIndex(d => d.id === id);
           if (debtIdx >= 0) {
+             // For debts: Paying (-delta for sender, but here we treat delta as net change).
+             // If we PAY a debt, delta passed here is likely negative (expense logic) or handled via Transfer logic.
+             // Wait, standard logic:
+             // Income: +delta. For Debt, Income (Repayment) should REDUCE debt amount.
+             // Expense: -delta. For Debt, Expense (Adding to debt) should INCREASE debt amount.
+             // But existing logic was: debtsCopy[debtIdx].amount = Math.max(0, debtsCopy[debtIdx].amount - delta);
+             // If delta is positive (Income), debt decreases. Correct.
+             // If delta is negative (Expense), debt increases. Correct.
              updatedDebts[debtIdx] = { ...updatedDebts[debtIdx], amount: Math.max(0, updatedDebts[debtIdx].amount - delta) };
           }
       };
@@ -530,6 +595,7 @@ export default function App() {
             { id: 'lending', icon: HandCoins, label: 'Lending' },
             { id: 'transactions', icon: ArrowRightLeft, label: 'Transactions' },
             { id: 'budget', icon: PieChart, label: 'Budgeting' },
+            { id: 'subscriptions', icon: Repeat, label: 'Subscriptions' },
             { id: 'investments', icon: TrendingUp, label: 'Investments' },
             { id: 'goals', icon: Target, label: 'Goals' },
             { id: 'ai', icon: Brain, label: 'AI Advisor' },
@@ -627,6 +693,18 @@ export default function App() {
 
              <div className={view === 'budget' ? 'block' : 'hidden'}>
                 <BudgetModule transactions={transactions} expenseCategories={expenseCategories} budgets={budgets} setBudgets={setBudgets} />
+            </div>
+
+            <div className={view === 'subscriptions' ? 'block' : 'hidden'}>
+                <SubscriptionsModule 
+                    subscriptions={subscriptions} 
+                    setSubscriptions={setSubscriptions} 
+                    accounts={accounts} 
+                    debts={debts}
+                    expenseCategories={expenseCategories} 
+                    incomeCategories={incomeCategories} 
+                    handleConfirmAction={handleConfirmAction} 
+                />
             </div>
 
             <div className={view === 'investments' ? 'block' : 'hidden'}>

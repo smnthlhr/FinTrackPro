@@ -6,7 +6,7 @@ export const DEFAULT_INCOME_CATEGORIES = ['Salary', 'Freelancing', 'Bonus', 'Inv
 export const DEFAULT_EXPENSE_CATEGORIES = ['Food', 'Rent', 'Travel', 'Entertainment', 'EMI', 'Trading Loss', 'Health', 'Groceries', 'Utilities', 'Shopping'];
 export const DEFAULT_DEBT_TYPES = ['EMI / Loan', 'Personal / Friends', 'Credit Card Bill', 'Business Loan', 'Mortgage'];
 export const DEFAULT_INVESTMENT_TYPES = ['Mutual Fund', 'Stocks', 'Crypto', 'FD', 'Real Estate', 'Gold', 'Bonds'];
-export const DEFAULT_ACCOUNT_TYPES = ['Bank', 'Cash', 'Crypto Wallet', 'Credit Card', 'Digital Wallet'];
+export const DEFAULT_ACCOUNT_TYPES = ['Bank', 'Cash', 'Credit Card', 'Lending Platform', 'Digital Wallet', 'Crypto Wallet'];
 
 export const SECURITY_QUESTIONS = [
   "What is the name of your first pet?",

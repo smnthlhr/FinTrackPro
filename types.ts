@@ -3,6 +3,8 @@ export interface Account {
   name: string;
   type: string;
   balance: number;
+  isCredit?: boolean; // true if it's a credit card or lending account
+  creditLimit?: number; // Total limit for credit accounts
 }
 
 export interface Transaction {
