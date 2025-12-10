@@ -36,6 +36,22 @@ const LendingsModule: React.FC<LendingsModuleProps> = ({
         accountId: accounts[0]?.id || ''
     });
 
+    const assetAccounts = accounts.filter(a => !a.isCredit);
+    const creditAccounts = accounts.filter(a => a.isCredit);
+
+    const renderAccountOptions = () => (
+        <>
+            <optgroup label="Bank & Cash">
+                {assetAccounts.map(a => <option key={a.id} value={a.id} className="dark:bg-slate-800">{a.name} ({formatCurrency(a.balance)})</option>)}
+            </optgroup>
+            {creditAccounts.length > 0 && (
+                <optgroup label="Credit Cards & Pay Later">
+                    {creditAccounts.map(a => <option key={a.id} value={a.id} className="dark:bg-slate-800">{a.name} (Avail: {formatCurrency(a.balance)})</option>)}
+                </optgroup>
+            )}
+        </>
+    );
+
     const handleCreateLending = () => {
         if (!newLending.borrower || !newLending.amount) {
             alert("Please fill in borrower and amount.");
@@ -189,7 +205,7 @@ const LendingsModule: React.FC<LendingsModuleProps> = ({
                                     onChange={e => setRepayment({...repayment, accountId: e.target.value})}
                                     className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-none"
                                 >
-                                    {accounts.map(a => <option key={a.id} value={a.id} className="dark:bg-slate-800">{a.name} ({formatCurrency(a.balance)})</option>)}
+                                    {renderAccountOptions()}
                                 </select>
                             </div>
                         </div>
@@ -239,7 +255,7 @@ const LendingsModule: React.FC<LendingsModuleProps> = ({
                             disabled={isOldLending}
                             className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
                         >
-                            {accounts.map(a => <option key={a.id} value={a.id} className="dark:bg-slate-800">{a.name} ({formatCurrency(a.balance)})</option>)}
+                            {renderAccountOptions()}
                         </select>
                     </div>
 

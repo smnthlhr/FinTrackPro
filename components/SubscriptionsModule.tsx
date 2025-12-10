@@ -106,6 +106,9 @@ const SubscriptionsModule: React.FC<SubscriptionsModuleProps> = ({
         .filter(s => s.isActive && s.type === 'expense')
         .reduce((sum, s) => sum + s.amount, 0);
 
+    const assetAccounts = accounts.filter(a => !a.isCredit);
+    const creditAccounts = accounts.filter(a => a.isCredit);
+
     return (
         <div className="space-y-6 animate-in fade-in duration-500">
             <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
@@ -186,12 +189,25 @@ const SubscriptionsModule: React.FC<SubscriptionsModuleProps> = ({
                             className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-none"
                         >
                             <option value="" disabled>-- Select Account --</option>
-                            <optgroup label="Accounts">
-                                {accounts.map(a => <option key={a.id} value={a.id} className="dark:bg-slate-800">{a.name} ({formatCurrency(a.balance)})</option>)}
+                            <optgroup label="Bank & Cash">
+                                {assetAccounts.map(a => (
+                                    <option key={a.id} value={a.id} className="dark:bg-slate-800">
+                                        {a.name} ({formatCurrency(a.balance)})
+                                    </option>
+                                ))}
                             </optgroup>
-                            {debts.length > 0 && (
-                                <optgroup label="Credit Cards / Debts">
-                                    {debts.map(d => <option key={d.id} value={d.id} className="dark:bg-slate-800">{d.title} (Debt: {formatCurrency(d.amount)})</option>)}
+                            {(creditAccounts.length > 0 || debts.length > 0) && (
+                                <optgroup label="Credit Cards & Liabilities">
+                                    {creditAccounts.map(a => (
+                                        <option key={a.id} value={a.id} className="dark:bg-slate-800">
+                                            {a.name} (Avail: {formatCurrency(a.balance)})
+                                        </option>
+                                    ))}
+                                    {debts.map(d => (
+                                        <option key={d.id} value={d.id} className="dark:bg-slate-800">
+                                            {d.title} (Debt: {formatCurrency(d.amount)})
+                                        </option>
+                                    ))}
                                 </optgroup>
                             )}
                         </select>

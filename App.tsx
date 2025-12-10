@@ -660,7 +660,7 @@ export default function App() {
             {view === 'dashboard' && <Dashboard transactions={transactions} accounts={accounts} monthlyMetrics={monthlyMetrics} totalNetWorth={totalNetWorth} totalWalletBalance={totalWalletBalance} totalInvestmentValue={totalInvestmentValue} totalDebtValue={totalDebtValue} setView={setView} />}
             
             <div className={view === 'accounts' ? 'block' : 'hidden'}>
-                <AccountsModule accounts={accounts} setAccounts={setAccounts} accountTypes={accountTypes} handleConfirmAction={handleConfirmAction} handleSaveTransaction={handleSaveTransaction} incomeCategories={incomeCategories} />
+                <AccountsModule accounts={accounts} setAccounts={setAccounts} accountTypes={accountTypes} handleConfirmAction={handleConfirmAction} handleSaveTransaction={handleSaveTransaction} incomeCategories={incomeCategories} debts={debts} />
             </div>
             
             <div className={view === 'debts' ? 'block' : 'hidden'}>

@@ -32,6 +32,22 @@ const InvestmentsModule: React.FC<InvestmentsModuleProps> = ({
     const [actionAccount, setActionAccount] = useState('');
     const [editDetails, setEditDetails] = useState<{name: string, type: string, sip: string, amount: string}>({ name: '', type: '', sip: '', amount: '' });
 
+    const assetAccounts = accounts.filter(a => !a.isCredit);
+    const creditAccounts = accounts.filter(a => a.isCredit);
+
+    const renderAccountOptions = () => (
+        <>
+            <optgroup label="Bank & Cash">
+                {assetAccounts.map(a => <option key={a.id} value={a.id} className="dark:bg-slate-800">{a.name} ({formatCurrency(a.balance)})</option>)}
+            </optgroup>
+            {creditAccounts.length > 0 && (
+                <optgroup label="Credit Cards & Pay Later">
+                    {creditAccounts.map(a => <option key={a.id} value={a.id} className="dark:bg-slate-800">{a.name} (Avail: {formatCurrency(a.balance)})</option>)}
+                </optgroup>
+            )}
+        </>
+    );
+
     const handleAddInv = () => {
         if(!newInv.name || !amountInput) return;
         const investedAmount = parseFloat(amountInput);
@@ -294,7 +310,7 @@ const InvestmentsModule: React.FC<InvestmentsModuleProps> = ({
                                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Source Account (Optional)</label>
                                     <select value={actionAccount} onChange={e => setActionAccount(e.target.value)} className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-none">
                                         <option value="">-- None (Just Track) --</option>
-                                        {accounts.map(a => <option key={a.id} value={a.id} className="dark:bg-slate-800">{a.name} ({formatCurrency(a.balance)})</option>)}
+                                        {renderAccountOptions()}
                                     </select>
                                 </div>
                                 <button onClick={handleAddFunds} className="w-full py-3 bg-emerald-600 text-white rounded-xl font-bold hover:bg-emerald-700 transition-colors shadow-lg shadow-emerald-500/30 flex items-center justify-center">
@@ -323,7 +339,7 @@ const InvestmentsModule: React.FC<InvestmentsModuleProps> = ({
                                     <label className="block text-sm font-medium text-slate-700 dark:text-slate-300 mb-1">Destination Account (Required)</label>
                                     <select value={actionAccount} onChange={e => setActionAccount(e.target.value)} className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-none focus:ring-2 focus:ring-red-500">
                                         <option value="">-- Select Account --</option>
-                                        {accounts.map(a => <option key={a.id} value={a.id} className="dark:bg-slate-800">{a.name} ({formatCurrency(a.balance)})</option>)}
+                                        {renderAccountOptions()}
                                     </select>
                                 </div>
                                 <button onClick={handleWithdrawFunds} className="w-full py-3 bg-red-600 text-white rounded-xl font-bold hover:bg-red-700 transition-colors shadow-lg shadow-red-500/30 flex items-center justify-center">

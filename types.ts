@@ -5,6 +5,8 @@ export interface Account {
   balance: number;
   isCredit?: boolean; // true if it's a credit card or lending account
   creditLimit?: number; // Total limit for credit accounts
+  billingDay?: number; // Day of the month (1-31)
+  maskedNumber?: string; // Last 4 digits
 }
 
 export interface Transaction {

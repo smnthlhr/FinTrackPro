@@ -55,14 +55,31 @@ const TransactionModule: React.FC<TransactionModuleProps> = ({
 
     // Helper to render mixed options (Accounts + Debts)
     const renderAccountOptions = (includeDebts = false) => {
+        const assetAccounts = accounts.filter(a => !a.isCredit);
+        const creditAccounts = accounts.filter(a => a.isCredit);
+
         return (
             <>
-                <optgroup label="Accounts">
-                    {accounts.map(a => <option key={a.id} value={a.id} className="dark:bg-slate-800">{a.name} ({formatCurrency(a.balance)})</option>)}
+                <optgroup label="Bank & Cash">
+                    {assetAccounts.map(a => (
+                        <option key={a.id} value={a.id} className="dark:bg-slate-800">
+                            {a.name} ({formatCurrency(a.balance)})
+                        </option>
+                    ))}
                 </optgroup>
-                {includeDebts && debts.length > 0 && (
-                    <optgroup label="Credit Cards / Debts">
-                        {debts.map(d => <option key={d.id} value={d.id} className="dark:bg-slate-800">{d.title} (Debt: {formatCurrency(d.amount)})</option>)}
+                
+                {(creditAccounts.length > 0 || (includeDebts && debts.length > 0)) && (
+                    <optgroup label="Credit Cards & Pay Later">
+                        {creditAccounts.map(a => (
+                            <option key={a.id} value={a.id} className="dark:bg-slate-800">
+                                {a.name} (Avail: {formatCurrency(a.balance)})
+                            </option>
+                        ))}
+                        {includeDebts && debts.map(d => (
+                            <option key={d.id} value={d.id} className="dark:bg-slate-800">
+                                {d.title} (Debt: {formatCurrency(d.amount)})
+                            </option>
+                        ))}
                     </optgroup>
                 )}
             </>

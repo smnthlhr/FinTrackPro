@@ -70,6 +70,10 @@ const DebtsModule: React.FC<DebtsModuleProps> = ({ debts, setDebts, debtTypes, h
           setPayAmount('');
       };
 
+      // Filter accounts for "Pay From"
+      const assetAccounts = accounts.filter(a => !a.isCredit);
+      const creditAccounts = accounts.filter(a => a.isCredit); // Allow balance transfer scenario
+
       return (
         <div className="space-y-6 animate-in fade-in duration-500 relative">
           <div className="flex justify-between items-center">
@@ -103,7 +107,14 @@ const DebtsModule: React.FC<DebtsModuleProps> = ({ debts, setDebts, debtTypes, h
                                   onChange={e => setPayFromAcc(e.target.value)}
                                   className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-slate-50 dark:bg-slate-900 text-slate-900 dark:text-white outline-none"
                               >
-                                  {accounts.map(a => <option key={a.id} value={a.id} className="dark:bg-slate-800">{a.name} ({formatCurrency(a.balance)})</option>)}
+                                  <optgroup label="Bank & Cash">
+                                      {assetAccounts.map(a => <option key={a.id} value={a.id} className="dark:bg-slate-800">{a.name} ({formatCurrency(a.balance)})</option>)}
+                                  </optgroup>
+                                  {creditAccounts.length > 0 && (
+                                      <optgroup label="Credit Cards (Balance Transfer)">
+                                          {creditAccounts.map(a => <option key={a.id} value={a.id} className="dark:bg-slate-800">{a.name} (Avail: {formatCurrency(a.balance)})</option>)}
+                                      </optgroup>
+                                  )}
                               </select>
                           </div>
                       </div>
