@@ -1,11 +1,53 @@
 import React, { useState } from 'react';
-import { Brain, MessageSquare, Mic } from 'lucide-react';
+import { Brain, MessageSquare, Mic, Sparkles } from 'lucide-react';
 import { GoogleGenAI } from '@google/genai';
 import { 
     Transaction, Account, Investment, Debt, Goal, AppMetadata, Lending 
 } from '../types';
 import { formatDate, generateAIContext } from '../utils';
 import LiveVoiceMode from './LiveVoiceMode';
+
+// --- Simple Markdown Renderer Component ---
+const MarkdownRenderer = ({ content }: { content: string }) => {
+    // Helper to parse bold text (**text**) inside a string
+    const renderInline = (text: string) => {
+        const parts = text.split(/(\*\*.*?\*\*)/g);
+        return parts.map((part, index) => {
+            if (part.startsWith('**') && part.endsWith('**')) {
+                return <strong key={index} className="font-bold text-slate-900 dark:text-white">{part.slice(2, -2)}</strong>;
+            }
+            return part;
+        });
+    };
+
+    const lines = content.split('\n');
+
+    return (
+        <div className="space-y-1.5 text-sm">
+            {lines.map((line, i) => {
+                const trimmed = line.trim();
+                if (!trimmed) return <div key={i} className="h-2" />;
+
+                // List Items (* or -)
+                if (trimmed.startsWith('* ') || trimmed.startsWith('- ')) {
+                    return (
+                        <div key={i} className="flex items-start ml-2 space-x-2">
+                             <div className="mt-2 w-1.5 h-1.5 rounded-full bg-slate-400 dark:bg-slate-500 shrink-0" />
+                             <span className="text-slate-700 dark:text-slate-200">{renderInline(trimmed.substring(2))}</span>
+                        </div>
+                    );
+                }
+
+                // Headers (### or ##)
+                if (trimmed.startsWith('### ')) return <h4 key={i} className="font-bold text-base mt-3 mb-1 text-slate-800 dark:text-slate-100">{renderInline(trimmed.substring(4))}</h4>;
+                if (trimmed.startsWith('## ')) return <h3 key={i} className="font-bold text-lg mt-4 mb-2 text-slate-900 dark:text-white">{renderInline(trimmed.substring(3))}</h3>;
+                
+                // Regular Paragraph
+                return <p key={i} className="leading-relaxed text-slate-700 dark:text-slate-200">{renderInline(line)}</p>;
+            })}
+        </div>
+    );
+};
 
 interface AIModuleProps {
     setView: (view: string) => void;
@@ -57,7 +99,8 @@ const AIModule: React.FC<AIModuleProps> = ({
     1. Answer questions about the user's financial health, app usage history, or data customization.
     2. Format currency in INR (₹).
     3. LANGUAGE: Respond ONLY in ${aiLanguage}.
-    4. DENY DATA ENTRY: You CANNOT add, edit, or delete any data (transactions, accounts, etc.). If the user asks to add a transaction or modify data, politely decline and instruct them to use the app's manual buttons.`;
+    4. FORMATTING: Use Markdown for structure. Use **bold** for key figures and headings. Use bullet points (* item) for lists. Do NOT use markdown code blocks or JSON output unless explicitly asked.
+    5. DENY DATA ENTRY: You CANNOT add, edit, or delete any data (transactions, accounts, etc.). If the user asks to add a transaction or modify data, politely decline and instruct them to use the app's manual buttons.`;
 
     const voiceSystemPrompt = `You are FinTrackPro's Voice Assistant. You have access to the user's finances: ${JSON.stringify(contextData)}. 
     
@@ -66,11 +109,12 @@ const AIModule: React.FC<AIModuleProps> = ({
     2. LANGUAGE: Speak ONLY in ${aiLanguage}. Even if the user speaks another language, reply strictly in ${aiLanguage}.
     3. DENY DATA ENTRY: You CANNOT add or modify data. If asked to add/edit data, refuse politely and direct the user to the manual buttons.`;
 
-    const handleSend = async () => {
-      if (!input.trim() || !apiKey) return;
+    const handleSend = async (textInput?: string) => {
+      const msgToSend = textInput || input;
+      if (!msgToSend.trim() || !apiKey) return;
       
-      const userMsg = { role: 'user' as const, content: input };
-      setMessages([...messages, userMsg]);
+      const userMsg = { role: 'user' as const, content: msgToSend };
+      setMessages(prev => [...prev, userMsg]);
       setInput('');
       setLoading(true);
 
@@ -82,7 +126,7 @@ const AIModule: React.FC<AIModuleProps> = ({
           contents: [
             {
                 role: 'user',
-                parts: [{ text: textSystemPrompt + "\n\nUser Question: " + input }]
+                parts: [{ text: textSystemPrompt + "\n\nUser Question: " + msgToSend }]
             }
           ]
         });
@@ -96,6 +140,17 @@ const AIModule: React.FC<AIModuleProps> = ({
       }
       setLoading(false);
     };
+
+    const faqs = [
+        "What is my current Net Worth?",
+        "What do I spend the most on?",
+        "Calculate my average daily spending.",
+        "How much have I saved this month?",
+        "Do I have any debt repayment due?",
+        "Analyze my investment portfolio.",
+        "Suggest ways to cut costs.",
+        "What is my total liquidity?"
+    ];
 
     if (!apiKey) {
       return (
@@ -141,19 +196,30 @@ const AIModule: React.FC<AIModuleProps> = ({
             <>
                 <div className="flex-1 overflow-y-auto p-6 space-y-6 custom-scrollbar bg-slate-50/50 dark:bg-transparent">
                 {messages.length === 0 && (
-                    <div className="text-center text-slate-400 mt-16">
-                    <p className="mb-4">I have access to your full financial profile.</p>
-                    <div className="flex flex-wrap justify-center gap-2">
-                        <button onClick={() => setInput("When did I start using this app?")} className="text-xs bg-white dark:bg-slate-700 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-600 hover:border-blue-500 transition-colors shadow-sm">App Registration Date?</button>
-                        <button onClick={() => setInput("What custom categories have I added?")} className="text-xs bg-white dark:bg-slate-700 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-600 hover:border-blue-500 transition-colors shadow-sm">My Categories?</button>
-                        <button onClick={() => setInput("Analyze my last 30 transactions.")} className="text-xs bg-white dark:bg-slate-700 px-4 py-2 rounded-full border border-slate-200 dark:border-slate-600 hover:border-blue-500 transition-colors shadow-sm">Analyze Transactions</button>
-                    </div>
+                    <div className="flex flex-col items-center justify-center h-full text-center text-slate-400">
+                        <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/20 rounded-full flex items-center justify-center mb-6">
+                            <Sparkles size={32} className="text-blue-500" />
+                        </div>
+                        <h3 className="text-lg font-bold text-slate-700 dark:text-slate-300 mb-2">How can I help you today?</h3>
+                        <p className="max-w-xs mb-8 text-sm">I have analyzed your full financial profile. Ask me anything or choose a topic below.</p>
+                        
+                        <div className="flex flex-wrap justify-center gap-3 max-w-2xl">
+                            {faqs.map((faq, idx) => (
+                                <button 
+                                    key={idx}
+                                    onClick={() => handleSend(faq)} 
+                                    className="text-xs bg-white dark:bg-slate-700 px-4 py-2.5 rounded-xl border border-slate-200 dark:border-slate-600 hover:border-blue-500 hover:text-blue-600 dark:hover:text-blue-400 transition-all shadow-sm flex items-center"
+                                >
+                                    {faq}
+                                </button>
+                            ))}
+                        </div>
                     </div>
                 )}
                 {messages.map((m, i) => (
                     <div key={i} className={`flex ${m.role === 'user' ? 'justify-end' : 'justify-start'}`}>
                     <div className={`max-w-[85%] p-4 rounded-2xl text-sm leading-relaxed shadow-sm ${m.role === 'user' ? 'bg-blue-600 text-white rounded-tr-sm' : 'bg-white dark:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-tl-sm border border-slate-100 dark:border-slate-600'}`}>
-                        {m.content}
+                        {m.role === 'ai' ? <MarkdownRenderer content={m.content} /> : m.content}
                     </div>
                     </div>
                 ))}
@@ -178,7 +244,7 @@ const AIModule: React.FC<AIModuleProps> = ({
                     placeholder="Ask about your data, settings, or history..."
                     className="flex-1 p-3 rounded-xl bg-slate-50 dark:bg-slate-900 border border-slate-200 dark:border-slate-600 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none transition-all"
                     />
-                    <button onClick={handleSend} className="bg-blue-600 text-white px-6 rounded-xl hover:bg-blue-700 transition-colors font-medium">Send</button>
+                    <button onClick={() => handleSend()} className="bg-blue-600 text-white px-6 rounded-xl hover:bg-blue-700 transition-colors font-medium">Send</button>
                 </div>
                 </div>
             </>

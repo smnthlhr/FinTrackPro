@@ -1,18 +1,55 @@
 import { Transaction, Account, Investment, Debt, Goal, AppMetadata, Lending } from './types';
 
+// Global Configuration State
+let currencyConfig = {
+    code: 'INR',
+    locale: 'en-IN',
+    rate: 1
+};
+
+export const CURRENCY_OPTIONS = [
+    { code: 'INR', name: 'Indian Rupee', locale: 'en-IN', symbol: '₹' },
+    { code: 'USD', name: 'US Dollar', locale: 'en-US', symbol: '$' },
+    { code: 'EUR', name: 'Euro', locale: 'de-DE', symbol: '€' },
+    { code: 'GBP', name: 'British Pound', locale: 'en-GB', symbol: '£' },
+    { code: 'BDT', name: 'Bangladeshi Taka', locale: 'bn-BD', symbol: '৳' },
+    { code: 'CAD', name: 'Canadian Dollar', locale: 'en-CA', symbol: 'CA$' },
+    { code: 'AUD', name: 'Australian Dollar', locale: 'en-AU', symbol: 'A$' },
+    { code: 'JPY', name: 'Japanese Yen', locale: 'ja-JP', symbol: '¥' },
+    { code: 'AED', name: 'UAE Dirham', locale: 'en-AE', symbol: 'dh' },
+];
+
+export function setCurrencyConfig(code: string, rate: number) {
+    const option = CURRENCY_OPTIONS.find(c => c.code === code) || CURRENCY_OPTIONS[0];
+    currencyConfig = {
+        code: code,
+        locale: option.locale,
+        rate: rate > 0 ? rate : 1
+    };
+}
+
 export function formatCurrency(amount: number | string | undefined | null): string {
   const val = typeof amount === 'string' ? parseFloat(amount) : amount;
-  if (amount === undefined || amount === null || isNaN(val as number)) return "₹0";
-  return new Intl.NumberFormat('en-IN', {
-    style: 'currency',
-    currency: 'INR',
-    maximumFractionDigits: 0
-  }).format(val as number);
+  if (amount === undefined || amount === null || isNaN(val as number)) return formatValue(0);
+  
+  // Apply conversion rate
+  const convertedValue = (val as number) * currencyConfig.rate;
+  return formatValue(convertedValue);
+}
+
+function formatValue(val: number): string {
+    return new Intl.NumberFormat(currencyConfig.locale, {
+        style: 'currency',
+        currency: currencyConfig.code,
+        minimumFractionDigits: 0,
+        maximumFractionDigits: 2 
+    }).format(val);
 }
 
 export function formatDate(dateString: string): string {
     if (!dateString) return 'N/A';
-    return new Date(dateString).toLocaleDateString('en-IN', {
+    // Use the currency locale for date formatting as well for consistency
+    return new Date(dateString).toLocaleDateString(currencyConfig.locale, {
         year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
     });
 }
@@ -63,6 +100,7 @@ export function generateAIContext(
             appRegisteredDate: appMetadata.createdAt,
             dataLastEdited: appMetadata.lastModified,
             currentTimestamp: new Date().toISOString(),
+            currency: currencyConfig.code,
             totalDataPoints: {
                 transactions: transactions.length,
                 accounts: accounts.length,
@@ -80,20 +118,24 @@ export function generateAIContext(
             customDebtTypes: debtTypes
         },
         financialSummary: {
-            netWorth: totalNetWorth,
-            totalLiabilities: totalDebtValue,
-            totalActiveLending: totalLentActive,
-            monthlySnapshot: monthlyMetrics
+            netWorth: totalNetWorth * currencyConfig.rate,
+            totalLiabilities: totalDebtValue * currencyConfig.rate,
+            totalActiveLending: totalLentActive * currencyConfig.rate,
+            monthlySnapshot: {
+                income: monthlyMetrics.income * currencyConfig.rate,
+                expense: monthlyMetrics.expense * currencyConfig.rate,
+                savings: monthlyMetrics.savings * currencyConfig.rate
+            }
         },
         data: {
-            accounts: accounts.map(a => ({ name: a.name, type: a.type, balance: a.balance })),
-            investments: investments.map(i => ({ name: i.name, type: i.type, amount: i.investedAmount, date: i.date })),
-            debts: debts.map(d => ({ title: d.title, type: d.type, amount: d.amount, dueDate: d.dueDate })),
+            accounts: accounts.map(a => ({ name: a.name, type: a.type, balance: a.balance * currencyConfig.rate })),
+            investments: investments.map(i => ({ name: i.name, type: i.type, amount: i.investedAmount * currencyConfig.rate, date: i.date })),
+            debts: debts.map(d => ({ title: d.title, type: d.type, amount: d.amount * currencyConfig.rate, dueDate: d.dueDate })),
             goals: goals,
             activeLendings: lendings.filter(l => l.status === 'active').map(l => ({
                 borrower: l.borrower,
-                originalAmount: l.totalAmount,
-                repaid: l.payments.reduce((s, p) => s + p.amount, 0),
+                originalAmount: l.totalAmount * currencyConfig.rate,
+                repaid: l.payments.reduce((s, p) => s + p.amount, 0) * currencyConfig.rate,
                 returnDate: l.returnDate
             })),
             recentTransactions: transactions.slice(0, 30), 

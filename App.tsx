@@ -12,7 +12,7 @@ import {
   DEFAULT_INCOME_CATEGORIES, DEFAULT_EXPENSE_CATEGORIES, 
   DEFAULT_DEBT_TYPES, DEFAULT_INVESTMENT_TYPES, DEFAULT_ACCOUNT_TYPES 
 } from './constants';
-import { formatCurrency, generateId, generateAIContext } from './utils';
+import { formatCurrency, generateId, generateAIContext, setCurrencyConfig } from './utils';
 
 import Dashboard from './components/Dashboard';
 import AccountsModule from './components/AccountsModule';
@@ -37,6 +37,10 @@ export default function App() {
   // AI Settings
   const [aiLanguage, setAiLanguage] = useState<string>('English');
   const [aiVoice, setAiVoice] = useState<string>('Zephyr');
+
+  // Currency Settings
+  const [currency, setCurrency] = useState<string>('INR');
+  const [currencyRate, setCurrencyRate] = useState<number>(1);
 
   // Security Settings
   const [appPin, setAppPin] = useState<string | null>(null);
@@ -74,6 +78,11 @@ export default function App() {
       actionType: 'delete' | 'update';
   }>({ isOpen: false, title: '', message: '', onConfirm: () => {}, actionType: 'delete' });
 
+  // Sync Currency Config with Utility
+  useMemo(() => {
+      setCurrencyConfig(currency, currencyRate);
+  }, [currency, currencyRate]);
+
   // Load Data
   useEffect(() => {
     const savedData = localStorage.getItem('finance_app_data_v10');
@@ -99,6 +108,10 @@ export default function App() {
         // Restore AI settings
         setAiLanguage(parsed.aiLanguage || 'English');
         setAiVoice(parsed.aiVoice || 'Zephyr');
+
+        // Restore Currency Settings
+        setCurrency(parsed.currency || 'INR');
+        setCurrencyRate(parsed.currencyRate || 1);
 
         // Restore Security Settings
         if (parsed.appPin) setAppPin(parsed.appPin);
@@ -181,11 +194,12 @@ export default function App() {
         appMetadata: newMetadata,
         view,
         aiLanguage, aiVoice,
+        currency, currencyRate,
         appPin, isAppLocked, securityQA
     };
     localStorage.setItem('finance_app_data_v10', JSON.stringify(dataToSave));
     setLastSaved(new Date());
-  }, [accounts, transactions, goals, investments, debts, lendings, budgets, subscriptions, theme, incomeCategories, expenseCategories, debtTypes, investmentTypes, accountTypes, view, aiLanguage, aiVoice, appPin, isAppLocked, securityQA]);
+  }, [accounts, transactions, goals, investments, debts, lendings, budgets, subscriptions, theme, incomeCategories, expenseCategories, debtTypes, investmentTypes, accountTypes, view, aiLanguage, aiVoice, currency, currencyRate, appPin, isAppLocked, securityQA]);
 
   const totalWalletBalance = accounts.reduce((sum, acc) => sum + (acc.balance || 0), 0);
   const totalInvestmentValue = investments.reduce((sum, inv) => sum + (inv.investedAmount || 0), 0);
@@ -380,10 +394,7 @@ export default function App() {
         const titleRow = `<Row><Cell ss:StyleID="Title"><Data ss:Type="String">${escapeXml(title)}</Data></Cell></Row><Row></Row>`;
         return `<Worksheet ss:Name="${escapeXml(name)}"><Table><Column ss:Width="100"/><Column ss:Width="120"/><Column ss:Width="120"/><Column ss:Width="120"/><Column ss:Width="120"/><Column ss:Width="200"/>${titleRow}${headerRow}${dataRows}</Table></Worksheet>`;
     };
-    // ... Data Preparation steps from original file ...
-    // NOTE: In a real diff, I would include the full function. 
-    // For this response, I assume the original logic persists. 
-    // I will include the existing logic to ensure no regression.
+    
     const totalAssets = totalWalletBalance + totalInvestmentValue;
     const overviewRows = [[{ value: 'Metric', style: 'Bold' }, { value: 'Value', style: 'Currency' }],[{ value: 'Total Net Worth' }, { value: totalNetWorth, style: 'Currency' }],[{ value: 'Total Assets' }, { value: totalAssets, style: 'Currency' }],[{ value: 'Total Liabilities' }, { value: totalDebtValue, style: 'Currency' }],[{ value: 'Account Breakdown', style: 'Title' }, { value: '' }],...accounts.map(a => [{ value: `${a.name} (${a.type})` }, { value: a.balance, style: 'Currency' }])];
     const sheetOverview = createWorksheet('Overview', 'Financial Snapshot', [], overviewRows);
@@ -415,7 +426,7 @@ export default function App() {
     const dataStr = JSON.stringify({ 
         accounts, transactions, goals, investments, debts, lendings, budgets, subscriptions, theme, 
         incomeCategories, expenseCategories, debtTypes, investmentTypes, accountTypes, 
-        appMetadata, aiLanguage, aiVoice,
+        appMetadata, aiLanguage, aiVoice, currency, currencyRate,
         appPin, isAppLocked, securityQA
     }, null, 2);
     const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
@@ -434,6 +445,7 @@ export default function App() {
     setAccountTypes(DEFAULT_ACCOUNT_TYPES);
     setAppMetadata({ createdAt: new Date().toISOString(), lastModified: new Date().toISOString() });
     setAppPin(null); setIsAppLocked(false); setSecurityQA([]);
+    setCurrency('INR'); setCurrencyRate(1);
     localStorage.removeItem('finance_app_data_v10');
     setView('dashboard');
   };
@@ -623,6 +635,9 @@ export default function App() {
                                 // Restore AI Settings
                                 if(parsed.aiLanguage) setAiLanguage(parsed.aiLanguage);
                                 if(parsed.aiVoice) setAiVoice(parsed.aiVoice);
+                                // Restore Currency
+                                if(parsed.currency) setCurrency(parsed.currency);
+                                if(parsed.currencyRate) setCurrencyRate(parsed.currencyRate);
                                 // Restore Security Settings
                                 if(parsed.appPin) setAppPin(parsed.appPin);
                                 if(parsed.securityQA) setSecurityQA(parsed.securityQA);
@@ -639,6 +654,8 @@ export default function App() {
                 accountTypes={accountTypes} setAccountTypes={setAccountTypes} 
                 aiLanguage={aiLanguage} setAiLanguage={setAiLanguage} 
                 aiVoice={aiVoice} setAiVoice={setAiVoice} 
+                currency={currency} setCurrency={setCurrency}
+                currencyRate={currencyRate} setCurrencyRate={setCurrencyRate}
                 appPin={appPin} setAppPin={setAppPin} setSecurityQA={setSecurityQA}
                 handleSaveTransaction={handleSaveTransaction}
             />}

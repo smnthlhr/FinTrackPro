@@ -1,10 +1,10 @@
 import React, { useState } from 'react';
 import { 
-  List, XCircle, Sun, Moon, Save, FileJson, FileSpreadsheet, Upload, AlertTriangle, Trash2, Download, Mic, Languages, Lock, ShieldCheck, Unlock, Key, FileText
+  List, XCircle, Sun, Moon, Save, FileJson, FileSpreadsheet, Upload, AlertTriangle, Trash2, Download, Mic, Languages, Lock, ShieldCheck, Unlock, Key, FileText, Globe
 } from 'lucide-react';
 import { SECURITY_QUESTIONS } from '../constants';
 import { SecurityQA, Transaction } from '../types';
-import { generateId } from '../utils';
+import { generateId, CURRENCY_OPTIONS } from '../utils';
 
 interface SettingsModuleProps {
     theme: string;
@@ -30,6 +30,12 @@ interface SettingsModuleProps {
     aiVoice: string;
     setAiVoice: (voice: string) => void;
 
+    // Currency Settings
+    currency: string;
+    setCurrency: (curr: string) => void;
+    currencyRate: number;
+    setCurrencyRate: (rate: number) => void;
+
     // Security Settings
     appPin: string | null;
     setAppPin: (pin: string | null) => void;
@@ -46,6 +52,8 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({
     accountTypes, setAccountTypes,
     aiLanguage, setAiLanguage,
     aiVoice, setAiVoice,
+    currency, setCurrency,
+    currencyRate, setCurrencyRate,
     appPin, setAppPin, setSecurityQA,
     handleSaveTransaction
 }) => {
@@ -168,39 +176,7 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({
             if (!text) return;
             
             const lines = text.split('\n');
-            let successCount = 0;
-
-            // Simple CSV Parser: Assumes Date,Amount,Type,Category,Notes
-            lines.forEach(line => {
-                const cols = line.split(',');
-                if (cols.length >= 3) {
-                     const date = cols[0].trim();
-                     const amount = parseFloat(cols[1].trim());
-                     const type = cols[2].trim().toLowerCase();
-                     const category = cols[3]?.trim() || 'General';
-                     const notes = cols[4]?.trim() || '';
-
-                     if (!isNaN(amount) && (type === 'income' || type === 'expense')) {
-                         // Default to first available account if we can't determine ID easily from CSV
-                         // In a real app, user would map columns.
-                         // Here we assume simple import.
-                         // Using default account ID if available in app (would need to pass account ID, skipping for simplicity in types props for now)
-                         // But `handleSaveTransaction` requires a full object. 
-                         // To make this robust without breaking props, we will just create object structure 
-                         // and let App.tsx validate or fail gently.
-                         
-                         // Note: We need a valid accountId.
-                         // Since we don't have accounts here easily without prop drilling, 
-                         // let's just alert user to use JSON backup for full restore.
-                         // Or we can add a simple instruction.
-                         
-                         // IMPORTANT: This feature requires more robust account mapping. 
-                         // For now, I will add the button but it needs `handleSaveTransaction` to handle creating logic, 
-                         // which expects a selected account.
-                         // I'll skip complex implementation to avoid bugs in one-shot.
-                     }
-                }
-            });
+            // Simple CSV parsing placeholder
             alert("CSV Import is a complex feature that requires column mapping. Please use JSON Backup for full data portability.");
         };
         reader.readAsText(file);
@@ -256,10 +232,67 @@ const SettingsModule: React.FC<SettingsModuleProps> = ({
 
       <div className="bg-white dark:bg-slate-800 p-8 rounded-2xl shadow-sm border border-slate-200 dark:border-slate-700 space-y-10">
         
-        {/* Security Settings */}
+        {/* Currency Settings */}
         <div>
             <h3 className="font-bold text-slate-900 dark:text-white mb-6 flex items-center">
-                <ShieldCheck size={18} className="mr-2 text-blue-500"/> App Security
+                <Globe size={18} className="mr-2 text-blue-500"/> Currency & Conversion
+            </h3>
+            <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-xl border border-slate-200 dark:border-slate-700 grid grid-cols-1 md:grid-cols-2 gap-6">
+                 <div>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Display Currency</label>
+                    <select 
+                        value={currency}
+                        onChange={(e) => setCurrency(e.target.value)}
+                        className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none"
+                    >
+                        {CURRENCY_OPTIONS.map(opt => (
+                            <option key={opt.code} value={opt.code}>{opt.name} ({opt.symbol})</option>
+                        ))}
+                    </select>
+                    <p className="text-xs text-slate-500 mt-2">All amounts will be displayed with this currency symbol.</p>
+                </div>
+                <div>
+                    <label className="block text-sm font-semibold text-slate-700 dark:text-slate-300 mb-2">Conversion Rate</label>
+                    <div className="relative">
+                        <input 
+                            type="number"
+                            value={currencyRate}
+                            onChange={(e) => setCurrencyRate(parseFloat(e.target.value))}
+                            className="w-full p-3 rounded-xl border border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-white focus:ring-2 focus:ring-blue-500 outline-none pr-12"
+                            placeholder="1.0"
+                            step="0.000001"
+                        />
+                         <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400 font-bold text-sm">
+                            Rate
+                        </div>
+                    </div>
+                    
+                    <div className="mt-3 text-xs text-slate-600 dark:text-slate-400 bg-white dark:bg-slate-800 p-3 rounded-lg border border-slate-200 dark:border-slate-700">
+                            <div className="flex justify-between items-center mb-1">
+                                <span className="font-semibold">Conversion Preview:</span>
+                            </div>
+                            <div className="flex items-center space-x-2 font-mono text-sm">
+                                <span>1.00 (Base)</span>
+                                <span>×</span>
+                                <span>{currencyRate}</span>
+                                <span>=</span>
+                                <span className="font-bold text-blue-600 dark:text-blue-400">
+                                    {new Intl.NumberFormat('en-US', { style: 'currency', currency: currency }).format(1 * currencyRate)}
+                                </span>
+                            </div>
+                            <p className="mt-2 text-[10px] text-slate-400 italic leading-relaxed">
+                                Note: Your stored data remains in the original currency. This rate is only used to calculate the displayed value.
+                                <br/>Example: If data is INR and you select USD, rate should be ~0.012.
+                            </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        {/* Security Settings */}
+        <div className="border-t border-slate-100 dark:border-slate-700 pt-8">
+            <h3 className="font-bold text-slate-900 dark:text-white mb-6 flex items-center">
+                <ShieldCheck size={18} className="mr-2 text-emerald-500"/> App Security
             </h3>
             <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-xl border border-slate-200 dark:border-slate-700">
                 {isRemoveVerifyOpen ? (
