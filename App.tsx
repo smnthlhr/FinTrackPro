@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Wallet, TrendingUp, Target, Settings, Brain, Menu, X, ArrowRightLeft, 
   CreditCard, Activity, Briefcase, CheckCircle, Lock, HandCoins, PieChart, Repeat
@@ -80,8 +80,8 @@ export default function App() {
   }>({ isOpen: false, title: '', message: '', onConfirm: () => {}, actionType: 'delete' });
 
   // Sync Currency Config with Utility
-  useMemo(() => {
-      setCurrencyConfig(currency, currencyRate);
+  useEffect(() => {
+    setCurrencyConfig(currency, currencyRate);
   }, [currency, currencyRate]);
 
   // Load Data
